@@ -105,6 +105,7 @@ func pollInput(g *game) {
 		if down != keysDown[k] {
 			keysDown[k] = down
 			pushScan(s, !down)
+			note("%v %s", k, map[bool]string{true: "down", false: "up"}[down])
 			if down {
 				repeatKey, repeatOn, repeatMs = s, true, 0
 			} else if repeatOn && repeatKey == s {
@@ -127,6 +128,7 @@ func pollInput(g *game) {
 	cx, cy := ebiten.CursorPosition()
 	if MouseLook != lookCaptured {
 		lookCaptured = MouseLook
+		note("mouse look %v", MouseLook)
 		if MouseLook {
 			ebiten.SetCursorMode(ebiten.CursorModeCaptured)
 		} else {
@@ -194,6 +196,9 @@ func pollInput(g *game) {
 	if lockClick {
 		lockClick = pressed
 		b = 0
+	}
+	if b != MouseButtons {
+		note("mouse buttons %d at %d,%d", b, MouseX, MouseY)
 	}
 	MouseButtons = b
 }
