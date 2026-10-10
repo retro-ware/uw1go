@@ -7,8 +7,8 @@ import (
 	"github.com/hajimehoshi/ebiten/v2/audio"
 )
 
-// The mixer: the emulated chip at its own rate, resampled to the output rate, with the
-// music's 120 Hz ticks counted in chip samples, and the speech's 8-bit PCM mixed in.
+// The mixer: the backend rendered in runs between the music's 120 Hz ticks, with the
+// speech's 8-bit PCM mixed in.
 
 const outRate = 44100
 
@@ -16,23 +16,23 @@ var (
 	actx   *audio.Context
 	player *audio.Player
 
-	chipPos  float64 // chip samples owed to the output, fractional
-	prevL    int
-	prevR    int
-	curL     int
-	curR     int
 	tickAcc  int
 	speech   []byte // unsigned 8-bit mono
 	speechHz int
 	speechAt float64
 	started  bool
+	mixBuf   []int
 )
 
-// Startup sets up the driver and starts the audio output. stereo pans the FM voices (the
-// dual-chip cards).
+// Startup sets up the driver on the emulated OPL2 and starts the audio output. stereo
+// pans the FM voices (the dual-chip cards).
 func Startup(stereo bool) {
+	startWith(newFM(stereo))
+}
+
+func startWith(b backend) {
 	mu.Lock()
-	drv = newDriver(stereo)
+	drv = &driver{b: b, installed: map[int]bool{}}
 	mu.Unlock()
 	StartOutput()
 }
@@ -64,7 +64,7 @@ func Shutdown() {
 			}
 		}
 		for c := 0; c < 16; c++ {
-			drv.allNotesOff(c)
+			drv.b.allNotesOff(c)
 		}
 	}
 	speech = nil
@@ -76,29 +76,31 @@ func (stream) Read(buf []byte) (int, error) {
 	frames := len(buf) / 4
 	mu.Lock()
 	defer mu.Unlock()
-	step := float64(oplRate) / outRate
-	for f := 0; f < frames; f++ {
-		var l, r int
-		if drv != nil {
-			chipPos += step
-			for chipPos >= 1 {
-				chipPos--
-				prevL, prevR = curL, curR
-				curL, curR = drv.render()
-				tickAcc += 120
-				if tickAcc >= oplRate {
-					tickAcc -= oplRate
-					for _, s := range drv.seqs {
-						if s != nil {
-							s.tick()
-						}
+	if cap(mixBuf) < frames*2 {
+		mixBuf = make([]int, frames*2)
+	}
+	mix := mixBuf[:frames*2]
+	clear(mix)
+	if drv != nil {
+		for f := 0; f < frames; {
+			n := (outRate - tickAcc + 119) / 120
+			if n > frames-f {
+				n = frames - f
+			}
+			drv.b.render(mix[f*2:], n)
+			f += n
+			if tickAcc += n * 120; tickAcc >= outRate {
+				tickAcc -= outRate
+				for _, s := range drv.seqs {
+					if s != nil {
+						s.tick()
 					}
 				}
 			}
-			l = prevL + int(float64(curL-prevL)*chipPos)
-			r = prevR + int(float64(curR-prevR)*chipPos)
-			l, r = l*2, r*2
 		}
+	}
+	for f := 0; f < frames; f++ {
+		l, r := mix[f*2], mix[f*2+1]
 		if speech != nil {
 			i := int(speechAt)
 			if i >= len(speech) {

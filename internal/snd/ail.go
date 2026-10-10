@@ -2,14 +2,13 @@ package snd
 
 import (
 	"encoding/binary"
-	"math"
 	"sync"
 )
 
-// The AIL XMIDI driver's interface, as SOUND.C uses it, over the emulated OPL2: global
-// timbres installed by bank and patch (the 14-byte AIL AdLib timbres of UW.AD), 16 MIDI
-// channels mapped onto the 9 FM voices, channels that the program locks away from the
-// music for its own notes, and XMIDI sequences played at the fixed 120 Hz XMIDI rate.
+// The AIL XMIDI driver's interface, as SOUND.C uses it, over a synthesiser backend (the
+// emulated OPL2 with the AdLib driver's voice handling, or an MT-32 emulated by munt):
+// global timbres installed by bank and patch, channels that the program locks away from
+// the music for its own notes, and XMIDI sequences played at the fixed 120 Hz XMIDI rate.
 // Channels are numbered 1 to 16 where the API takes or returns one, as AIL's are.
 //
 // The driver's state is shared with the audio thread: every entry point takes mu.
@@ -23,90 +22,53 @@ const (
 	SeqDone    = 2
 )
 
-const (
-	defPitchRange = 12 // semitones of the pitch wheel, AIL's default
-	percChannel   = 9  // MIDI channel 10, the percussion
-	percBank      = 127
-)
-
-// velGraph is AIL's velocity sensitivity curve, indexed by velocity / 8.
-var velGraph = [16]int{82, 85, 88, 91, 94, 97, 100, 103, 106, 109, 112, 115, 118, 121, 124, 127}
-
-type midiChan struct {
-	program, bank int
-	vol, expr     int
-	pan           int
-	bend          int // 0 to 0x3FFF, 0x2000 centred
-	sustain       bool
-	locked        bool
-}
-
-type voice struct {
-	active    bool
-	keyed     bool
-	sustained bool
-	ch, note  int
-	vel       int
-	timbre    []byte
-	age       uint32
+// backend is a synthesiser under the driver.
+type backend interface {
+	message(status, d1, d2 int)        // a channel voice message
+	sounding(c int) bool               // whether channel c has notes on
+	allNotesOff(c int)                 // silence channel c
+	builtIn(bank, patch int) bool      // a timbre the synthesiser has without installing
+	install(bank, patch int, t []byte) // a timbre record, with its length word
+	lockOrder() []int                  // the channels that may be locked, by preference
+	release(c int)                     // a locked channel back to its defaults
+	render(out []int, frames int)      // add frames of stereo output at outRate
 }
 
 type driver struct {
-	chip     *opl
-	ch       [16]midiChan
-	v        [9]voice
-	timbres  map[int][]byte
-	ageCount uint32
-	stereo   bool
-	seqs     []*sequence
+	b         backend
+	locked    [16]bool
+	installed map[int]bool
+	seqs      []*sequence
 }
 
 var drv *driver
 
-func newDriver(stereo bool) *driver {
-	d := &driver{chip: newOPL(), timbres: map[int][]byte{}, stereo: stereo}
-	d.chip.write(0x01, 0x20)
-	d.chip.write(0x08, 0x00)
-	d.chip.write(0xBD, 0x00)
-	for i := range d.ch {
-		d.resetChannel(i)
-		d.ch[i].vol = 127
-	}
-	return d
+func (d *driver) has(bank, patch int) bool {
+	return d.installed[bank<<8|patch] || d.b.builtIn(bank, patch)
 }
 
-func (d *driver) resetChannel(c int) {
-	ch := &d.ch[c]
-	ch.expr = 127
-	ch.pan = 64
-	ch.bend = 0x2000
-	ch.sustain = false
-}
+func (d *driver) noteOff(c, note int) { d.b.message(0x80|c, note, 0) }
 
 // InstallTimbre gives the driver a timbre, the whole record with its length word.
 func InstallTimbre(bank, patch int, t []byte) {
 	mu.Lock()
 	defer mu.Unlock()
-	if drv == nil || len(t) < 14 {
+	if drv == nil {
 		return
 	}
-	drv.timbres[bank<<8|patch] = append([]byte(nil), t...)
+	drv.installed[bank<<8|patch] = true
+	drv.b.install(bank, patch, t)
 }
 
 // TimbreStatus is whether bank, patch is installed.
 func TimbreStatus(bank, patch int) bool {
 	mu.Lock()
 	defer mu.Unlock()
-	if drv == nil {
-		return false
-	}
-	_, ok := drv.timbres[bank<<8|patch]
-	return ok
+	return drv != nil && drv.has(bank, patch)
 }
 
-// LockChannel takes a channel away from the music for the caller: the highest-numbered
-// one (not the percussion) that is unlocked, preferring one with no notes sounding. Its
-// notes are silenced. 0 if none is free.
+// LockChannel takes a channel away from the music for the caller, preferring one with
+// no notes sounding. Its notes are silenced. 0 if none is free.
 func LockChannel() int {
 	mu.Lock()
 	defer mu.Unlock()
@@ -114,11 +76,11 @@ func LockChannel() int {
 		return 0
 	}
 	best := -1
-	for c := 15; c >= 1; c-- {
-		if c == percChannel || drv.ch[c].locked {
+	for _, c := range drv.b.lockOrder() {
+		if drv.locked[c] {
 			continue
 		}
-		if !drv.channelSounding(c) {
+		if !drv.b.sounding(c) {
 			best = c
 			break
 		}
@@ -129,11 +91,13 @@ func LockChannel() int {
 	if best < 0 {
 		return 0
 	}
-	drv.allNotesOff(best)
+	drv.b.allNotesOff(best)
 	for _, s := range drv.seqs {
-		s.dropNotes(best)
+		if s != nil {
+			s.dropNotes(best)
+		}
 	}
-	drv.ch[best].locked = true
+	drv.locked[best] = true
 	return best + 1
 }
 
@@ -143,15 +107,14 @@ func ReleaseChannel(ch int) {
 	mu.Lock()
 	defer mu.Unlock()
 	c := ch - 1
-	if drv == nil || c < 0 || c > 15 || !drv.ch[c].locked {
+	if drv == nil || c < 0 || c > 15 || !drv.locked[c] {
 		return
 	}
-	drv.allNotesOff(c)
-	drv.ch[c].locked = false
-	drv.resetChannel(c)
-	drv.ch[c].vol = 127
+	drv.b.allNotesOff(c)
+	drv.locked[c] = false
+	drv.b.release(c)
 	for _, s := range drv.seqs {
-		if s.status == SeqPlaying {
+		if s != nil && s.status == SeqPlaying {
 			s.restore(c)
 		}
 	}
@@ -164,265 +127,8 @@ func SendVoice(status, d1, d2 int) {
 	if drv == nil {
 		return
 	}
-	drv.message(status&0xFF, d1&0x7F, d2&0x7F)
+	drv.b.message(status&0xFF, d1&0x7F, d2&0x7F)
 }
-
-func (d *driver) channelSounding(c int) bool {
-	for i := range d.v {
-		if d.v[i].active && d.v[i].ch == c && d.v[i].keyed {
-			return true
-		}
-	}
-	return false
-}
-
-// message carries out a channel voice message.
-func (d *driver) message(status, d1, d2 int) {
-	c := status & 15
-	ch := &d.ch[c]
-	switch status & 0xF0 {
-	case 0x80:
-		d.noteOff(c, d1)
-	case 0x90:
-		if d2 == 0 {
-			d.noteOff(c, d1)
-		} else {
-			d.noteOn(c, d1, d2)
-		}
-	case 0xB0:
-		switch d1 {
-		case 7:
-			ch.vol = d2
-			d.updateLevels(c)
-		case 0x0B:
-			ch.expr = d2
-			d.updateLevels(c)
-		case 0x0A:
-			ch.pan = d2
-		case 0x40:
-			ch.sustain = d2 >= 64
-			if !ch.sustain {
-				for i := range d.v {
-					if v := &d.v[i]; v.active && v.ch == c && v.sustained {
-						d.keyOff(i)
-					}
-				}
-			}
-		case 0x72:
-			ch.bank = d2
-		case 0x79:
-			d.resetChannel(c)
-			d.updateLevels(c)
-			d.updatePitch(c)
-		case 0x7B:
-			d.allNotesOff(c)
-		}
-	case 0xC0:
-		ch.program = d1
-	case 0xE0:
-		ch.bend = d1 | d2<<7
-		d.updatePitch(c)
-	}
-}
-
-func (d *driver) allNotesOff(c int) {
-	for i := range d.v {
-		if d.v[i].active && d.v[i].ch == c {
-			d.keyOff(i)
-		}
-	}
-}
-
-func (d *driver) noteOn(c, note, vel int) {
-	ch := &d.ch[c]
-	key := ch.bank<<8 | ch.program
-	if c == percChannel {
-		key = percBank<<8 | note
-	}
-	t, ok := d.timbres[key]
-	if !ok {
-		return
-	}
-	i := d.allocVoice(c)
-	if i < 0 {
-		return
-	}
-	d.ageCount++
-	d.v[i] = voice{active: true, keyed: true, ch: c, note: note, vel: vel, timbre: t, age: d.ageCount}
-	d.keyOffNow(i)
-	d.setTimbre(i)
-	d.setPitch(i, true)
-}
-
-// allocVoice picks a voice for a note on channel c: a free one, else the oldest released
-// one, else the oldest note of the music (a locked channel's notes are stolen last).
-func (d *driver) allocVoice(c int) int {
-	best := -1
-	for i := range d.v {
-		if !d.v[i].active {
-			return i
-		}
-	}
-	for i := range d.v {
-		if !d.v[i].keyed && (best < 0 || d.v[i].age < d.v[best].age) {
-			best = i
-		}
-	}
-	if best >= 0 {
-		return best
-	}
-	for pass := 0; pass < 2 && best < 0; pass++ {
-		for i := range d.v {
-			if pass == 0 && d.ch[d.v[i].ch].locked {
-				continue
-			}
-			if best < 0 || d.v[i].age < d.v[best].age {
-				best = i
-			}
-		}
-	}
-	return best
-}
-
-func (d *driver) noteOff(c, note int) {
-	for i := range d.v {
-		v := &d.v[i]
-		if v.active && v.keyed && v.ch == c && v.note == note {
-			if d.ch[c].sustain {
-				v.sustained = true
-			} else {
-				d.keyOff(i)
-			}
-		}
-	}
-}
-
-// keyOff releases voice i: its envelope runs out and the voice becomes free to take.
-func (d *driver) keyOff(i int) {
-	v := &d.v[i]
-	v.keyed = false
-	v.sustained = false
-	d.chip.write(0xB0+i, d.chip.regs[0xB0+i]&^0x20)
-}
-
-func (d *driver) keyOffNow(i int) {
-	d.chip.write(0xB0+i, d.chip.regs[0xB0+i]&^0x20)
-}
-
-// opBase is the register offset of voice i's modulator; the carrier's is 3 more.
-func opBase(i int) int { return slotReg[chSlot[i]] }
-
-func (d *driver) setTimbre(i int) {
-	t := d.v[i].timbre
-	m := opBase(i)
-	d.chip.write(0x20+m, t[3])
-	d.chip.write(0x60+m, t[5])
-	d.chip.write(0x80+m, t[6])
-	d.chip.write(0xE0+m, t[7])
-	d.chip.write(0xC0+i, t[8])
-	d.chip.write(0x20+m+3, t[9])
-	d.chip.write(0x60+m+3, t[11])
-	d.chip.write(0x80+m+3, t[12])
-	d.chip.write(0xE0+m+3, t[13])
-	d.setLevel(i)
-}
-
-// setLevel scales voice i's output level (the carrier's, and the modulator's too when
-// the connection is additive) by velocity, channel volume and expression.
-func (d *driver) setLevel(i int) {
-	v := &d.v[i]
-	t := v.timbre
-	ch := &d.ch[v.ch]
-	scale := velGraph[v.vel>>3] * ch.vol * ch.expr / (127 * 127)
-	lvl := func(ksltl byte) byte {
-		tl := int(ksltl & 0x3F)
-		tl = 0x3F - (0x3F-tl)*scale/127
-		return ksltl&0xC0 | byte(tl)
-	}
-	m := opBase(i)
-	if t[8]&1 != 0 {
-		d.chip.write(0x40+m, lvl(t[4]))
-	} else {
-		d.chip.write(0x40+m, t[4])
-	}
-	d.chip.write(0x40+m+3, lvl(t[10]))
-}
-
-func (d *driver) updateLevels(c int) {
-	for i := range d.v {
-		if d.v[i].active && d.v[i].ch == c {
-			d.setLevel(i)
-		}
-	}
-}
-
-func (d *driver) updatePitch(c int) {
-	for i := range d.v {
-		if d.v[i].active && d.v[i].ch == c {
-			d.setPitch(i, d.v[i].keyed)
-		}
-	}
-}
-
-// setPitch sets voice i's frequency from its note, the timbre's transpose (on the
-// percussion, the fixed note the timbre plays) and the channel's pitch wheel.
-func (d *driver) setPitch(i int, key bool) {
-	v := &d.v[i]
-	note := float64(v.note + int(int8(v.timbre[2])))
-	if v.ch == percChannel {
-		note = float64(v.timbre[2])
-	}
-	note += float64(d.ch[v.ch].bend-0x2000) / 0x2000 * defPitchRange
-	f := 440 * math.Pow(2, (note-69)/12)
-	block := 0
-	fnum := f * (1 << 20) / oplRate
-	for fnum >= 1024 && block < 7 {
-		block++
-		fnum /= 2
-	}
-	if fnum > 1023 {
-		fnum = 1023
-	}
-	n := int(fnum)
-	d.chip.write(0xA0+i, byte(n))
-	b := byte(n>>8&3) | byte(block<<2)
-	if key {
-		b |= 0x20
-	}
-	d.chip.write(0xB0+i, b)
-}
-
-// render runs the chip one sample: the mono sum, and its left and right when stereo.
-func (d *driver) render() (l, r int) {
-	var out [9]int
-	d.chip.sample(&out)
-	for i, s := range out {
-		if !d.stereo {
-			l += s
-			continue
-		}
-		p := d.ch[d.v[i].ch].pan
-		l += s * (127 - p) / 64
-		r += s * p / 64
-	}
-	if !d.stereo {
-		r = l
-	}
-	for i := range d.v {
-		v := &d.v[i]
-		if v.active && !v.keyed {
-			m := &d.chip.ops[chSlot[i]+3]
-			if m.eg >= 511 {
-				v.active = false
-			}
-		}
-	}
-	return
-}
-
-// The XMIDI sequencer: one FORM XMID's TIMB list and EVNT stream. Intervals are counts
-// of 120 Hz ticks; a note on carries its duration, so the sequencer keeps the notes
-// sounding and ends them. Controllers 0x74 and 0x75 are AIL's FOR and NEXT loops.
 
 type seqNote struct{ ch, note, left int }
 
@@ -548,7 +254,7 @@ func TimbreRequest(h int) int {
 	for s.tnext < len(s.timb) {
 		t := s.timb[s.tnext]
 		s.tnext++
-		if _, ok := drv.timbres[t[1]<<8|t[0]]; !ok {
+		if !drv.has(t[1], t[0]) {
 			return t[1]<<8 | t[0]
 		}
 	}
@@ -597,8 +303,8 @@ func SetRelativeVolume(h, pct, ms int) {
 	}
 	s.relVol = pct
 	for c := range s.shadow {
-		if s.shadow[c].set && !drv.ch[c].locked {
-			drv.message(0xB0|c, 7, s.shadow[c].vol*pct/100)
+		if s.shadow[c].set && !drv.locked[c] {
+			drv.b.message(0xB0|c, 7, s.shadow[c].vol*pct/100)
 		}
 	}
 }
@@ -608,7 +314,7 @@ func SetRelativeTempo(h, pct, ms int) {}
 
 func (s *sequence) stop() {
 	for _, n := range s.notes {
-		if !drv.ch[n.ch].locked {
+		if !drv.locked[n.ch] {
 			drv.noteOff(n.ch, n.note)
 		}
 	}
@@ -631,12 +337,12 @@ func (s *sequence) restore(c int) {
 	if !sh.set {
 		return
 	}
-	drv.message(0xB0|c, 0x72, sh.bank)
-	drv.message(0xC0|c, sh.program, 0)
-	drv.message(0xB0|c, 7, sh.vol*s.relVol/100)
-	drv.message(0xB0|c, 0x0B, sh.expr)
-	drv.message(0xB0|c, 0x0A, sh.pan)
-	drv.message(0xE0|c, sh.bend&0x7F, sh.bend>>7)
+	drv.b.message(0xB0|c, 0x72, sh.bank)
+	drv.b.message(0xC0|c, sh.program, 0)
+	drv.b.message(0xB0|c, 7, sh.vol*s.relVol/100)
+	drv.b.message(0xB0|c, 0x0B, sh.expr)
+	drv.b.message(0xB0|c, 0x0A, sh.pan)
+	drv.b.message(0xE0|c, sh.bend&0x7F, sh.bend>>7)
 }
 
 func (s *sequence) varlen() int {
@@ -691,8 +397,8 @@ func (s *sequence) send(status, d1, d2 int) {
 	case 0xE0:
 		sh.bend = d1 | d2<<7
 	}
-	if !drv.ch[c].locked {
-		drv.message(status, d1, d2)
+	if !drv.locked[c] {
+		drv.b.message(status, d1, d2)
 	}
 }
 
@@ -705,7 +411,7 @@ func (s *sequence) tick() {
 	for _, n := range s.notes {
 		n.left--
 		if n.left <= 0 {
-			if !drv.ch[n.ch].locked {
+			if !drv.locked[n.ch] {
 				drv.noteOff(n.ch, n.note)
 			}
 			continue
@@ -744,7 +450,7 @@ func (s *sequence) tick() {
 			n, v := s.byte(), s.byte()
 			dur := s.varlen()
 			s.send(b, n, v)
-			if v != 0 && !drv.ch[b&15].locked {
+			if v != 0 && !drv.locked[b&15] {
 				if dur <= 0 {
 					drv.noteOff(b&15, n)
 				} else {
