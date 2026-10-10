@@ -41,7 +41,8 @@ The PC speaker is not emulated.
 
 ## In the browser
 
-`-import SRC` finds the game anywhere under `SRC`, copies what it needs to
+`-import SRC` finds the game anywhere under `SRC` (also inside a CD image, such as
+the `game.gog` of the GOG installer), copies what it needs to
 `-data` with a cover picture, and exits. This mode is for
 [goplay](https://ruzzoli.de/goplay/), which runs the WebAssembly build
 (`GOOS=js GOARCH=wasm go build ./cmd/uw1`) on the player's own files, with

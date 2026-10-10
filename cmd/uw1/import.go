@@ -14,19 +14,52 @@ import (
 // importGame (-import, for goplay) finds an Ultima Underworld install anywhere under src
 // (the folder holding UW.EXE and DATA\LEV.ARK), copies what the engine reads into dst
 // (UW.EXE and the DATA, CRIT, CUTS and SOUND folders, plus any saved games in SAVE1 to
-// SAVE4), and writes dst/COVER.PNG from the title screen for the floppy label.
+// SAVE4), and writes dst/COVER.PNG from the title screen for the floppy label. Without
+// such a folder it looks in the CD images under src (iso.go), with the CD's write folder
+// UNDEROM1 laid over what comes from the CD.
 func importGame(src, dst string) error {
-	var dir string
+	var dir, underom string
+	var images []string
 	filepath.WalkDir(src, func(p string, d fs.DirEntry, _ error) error {
-		if d != nil && !d.IsDir() && strings.EqualFold(d.Name(), "UW.EXE") {
+		if d == nil {
+			return nil
+		}
+		if d.IsDir() {
+			if underom == "" && strings.EqualFold(d.Name(), "UNDEROM1") {
+				underom = p
+			}
+			return nil
+		}
+		if strings.EqualFold(d.Name(), "UW.EXE") {
 			if data := find(filepath.Dir(p), "DATA"); data != "" && find(filepath.Join(filepath.Dir(p), data), "LEV.ARK") != "" {
 				dir = filepath.Dir(p)
 				return fs.SkipAll
 			}
 		}
+		if info, err := d.Info(); err == nil && info.Size() > 17*isoSector {
+			images = append(images, p)
+		}
 		return nil
 	})
 	if dir == "" {
+		for _, img := range images {
+			ok, err := importISO(img, dst)
+			if err != nil {
+				return err
+			}
+			if ok {
+				if underom != "" {
+					if err := copyTree(underom, dst); err != nil {
+						return err
+					}
+					os.Remove(filepath.Join(dst, "MARKER.FIL"))
+				}
+				if err := soundOn(filepath.Join(dst, "DATA")); err != nil {
+					return err
+				}
+				return writeCover(dst)
+			}
+		}
 		return errors.New("no Ultima Underworld found")
 	}
 	if err := os.MkdirAll(dst, 0o755); err != nil {
@@ -37,10 +70,7 @@ func importGame(src, dst string) error {
 	}
 	ents, _ := os.ReadDir(dir)
 	for _, e := range ents {
-		name := strings.ToUpper(e.Name())
-		keep := name == "DATA" || name == "CRIT" || name == "CUTS" || name == "SOUND" ||
-			len(name) == 5 && strings.HasPrefix(name, "SAVE") && name[4] >= '1' && name[4] <= '4'
-		if e.IsDir() && keep {
+		if name := strings.ToUpper(e.Name()); e.IsDir() && keepDir(name) {
 			if err := copyTree(filepath.Join(dir, e.Name()), filepath.Join(dst, name)); err != nil {
 				return err
 			}
@@ -50,6 +80,12 @@ func importGame(src, dst string) error {
 		return err
 	}
 	return writeCover(dst)
+}
+
+// keepDir: the game's folders that are copied (upper-case name).
+func keepDir(name string) bool {
+	return name == "DATA" || name == "CRIT" || name == "CUTS" || name == "SOUND" ||
+		len(name) == 5 && strings.HasPrefix(name, "SAVE") && name[4] >= '1' && name[4] <= '4'
 }
 
 // soundOn sets the copied UW.CFG to a Sound Blaster for music and speech when it says no
