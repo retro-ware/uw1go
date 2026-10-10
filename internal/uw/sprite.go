@@ -1,6 +1,6 @@
 package uw
 
-import "github.com/felix/uw1go/internal/gr"
+import "github.com/memmaker/uw1go/internal/gr"
 
 // Port of SPRITE.ASM: pictures redrawn in place over what is under them, on four layers.
 // The calls that change a sprite only record the change and queue it (spChanged);

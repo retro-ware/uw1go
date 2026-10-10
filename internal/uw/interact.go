@@ -3,7 +3,7 @@ package uw
 import (
 	"strconv"
 
-	"github.com/felix/uw1go/internal/gr"
+	"github.com/memmaker/uw1go/internal/gr"
 )
 
 // Port of INTERACT.C: the game screen's click areas and the player's interaction with

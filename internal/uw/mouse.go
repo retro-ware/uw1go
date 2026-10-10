@@ -1,8 +1,8 @@
 package uw
 
 import (
-	"github.com/felix/uw1go/internal/gr"
-	"github.com/felix/uw1go/internal/host"
+	"github.com/memmaker/uw1go/internal/gr"
+	"github.com/memmaker/uw1go/internal/host"
 )
 
 // Port of MOUSE.C: the cursor and its save-under, the one-deep click queue, the cursor

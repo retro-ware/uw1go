@@ -4,7 +4,7 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/felix/uw1go/internal/gr"
+	"github.com/memmaker/uw1go/internal/gr"
 )
 
 // Port of UWEDIT.C: main, start-up and shut-down, the title, the screen dispatcher, game

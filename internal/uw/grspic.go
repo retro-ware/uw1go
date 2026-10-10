@@ -1,6 +1,6 @@
 package uw
 
-import "github.com/felix/uw1go/internal/gr"
+import "github.com/memmaker/uw1go/internal/gr"
 
 // Port of GRSPIC.C: graphic resource lookup, decoding and drawing by icon number.
 

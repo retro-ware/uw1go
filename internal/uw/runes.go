@@ -1,6 +1,6 @@
 package uw
 
-import "github.com/felix/uw1go/internal/gr"
+import "github.com/memmaker/uw1go/internal/gr"
 
 // Port of RUNES.C: the rune bag and casting from runes: adding a runestone to the bag,
 // drawing the bag, clicking runes onto the shelf, clicking an active spell, and casting

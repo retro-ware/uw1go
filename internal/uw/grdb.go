@@ -1,6 +1,6 @@
 package uw
 
-import "github.com/felix/uw1go/internal/r3d"
+import "github.com/memmaker/uw1go/internal/r3d"
 
 // Port of GRDB.C: the label table of the 3D view's render database, and SETPNT.ASM. The
 // database is the word bytecode VIEW3D.C, GRIDDB.C and DRAWOBJ.C write into the buffer at

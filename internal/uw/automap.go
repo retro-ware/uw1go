@@ -4,7 +4,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/felix/uw1go/internal/gr"
+	"github.com/memmaker/uw1go/internal/gr"
 )
 
 // Port of AUTOMAP.C: the map screen: the player's map of each level (PlayersMap, one byte

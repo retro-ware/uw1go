@@ -4,7 +4,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/felix/uw1go/internal/gr"
+	"github.com/memmaker/uw1go/internal/gr"
 )
 
 // Port of MAINMENU.C: the start menu on DATA\OPSCR.BYT with the OPBTN.GR buttons

@@ -1,6 +1,6 @@
 package uw
 
-import "github.com/felix/uw1go/internal/r3d"
+import "github.com/memmaker/uw1go/internal/r3d"
 
 // Port of GRIDDB.C: building the 3D view's render database from the map grid.
 // subprocess walks the visible cells of the vision grid from the farthest row to the eye

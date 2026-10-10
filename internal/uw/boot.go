@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/felix/uw1go/internal/gr"
-	"github.com/felix/uw1go/internal/host"
+	"github.com/memmaker/uw1go/internal/gr"
+	"github.com/memmaker/uw1go/internal/host"
 )
 
 var frame host.Frame

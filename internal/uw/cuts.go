@@ -4,7 +4,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/felix/uw1go/internal/gr"
+	"github.com/memmaker/uw1go/internal/gr"
 )
 
 // Port of CUTS.C: the cutscene player. A cutscene is CUTS\csNNN.n00, an opcode script, and

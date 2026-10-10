@@ -4,7 +4,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/felix/uw1go/internal/gr"
+	"github.com/memmaker/uw1go/internal/gr"
 )
 
 // Port of STATS.C: the character panel's statistics page: the name, class and level

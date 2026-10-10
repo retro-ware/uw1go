@@ -1,6 +1,6 @@
 package uw
 
-import "github.com/felix/uw1go/internal/gr"
+import "github.com/memmaker/uw1go/internal/gr"
 
 // Port of PANELS.C: the screen furniture around the 3D view: the vitality and mana
 // flasks, the compass, the power gem, the dragons, the eyes, the first-person weapon, the
