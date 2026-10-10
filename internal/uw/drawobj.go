@@ -273,8 +273,6 @@ func doRect(model int, o *Object, heading int, tex int) {
 	}
 	if (model == 0x10 || model == 0x11) && tmapson|int(PickUp) == 0 {
 		hilite = 0
-	} else if PickUp == 0 && player.Detail() == 1 && model == 2 {
-		hilite = 1
 	}
 	if hilite != -1 {
 		movec(Clk(8), hilite)

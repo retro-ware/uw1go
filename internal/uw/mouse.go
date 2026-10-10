@@ -46,7 +46,6 @@ var (
 	mWarpRate    int
 	cursW        int
 	warpY        int
-	warpKey      int
 	hitY0        int
 	regIcon      [20]int
 	cursStack    [3]int
@@ -287,7 +286,7 @@ func keyRepeats(ch int) bool {
 	case '1', '3', 'v', 'b', KEY_GUP, KEY_GDOWN, KEY_GLEFT, KEY_GRIGHT:
 		return true
 	}
-	return ch >= KEY_HOME && ch <= KEY_DEL
+	return false
 }
 
 // keyArrayInput takes KEY's result (the character, the key in the high byte) and gives the
@@ -330,8 +329,6 @@ func doKeyboardInput(array bool) int {
 	now := keyOn[0x2A] != 0
 	if now && !lshiftWas {
 		lshiftAlone = true
-	} else if now && otherKeyDown() {
-		lshiftAlone = false
 	}
 	released := !now && lshiftWas && lshiftAlone
 	lshiftWas = now
@@ -346,6 +343,9 @@ func doKeyboardInput(array bool) int {
 		return c
 	}
 	c := KEY()
+	if c>>8 != 0 && keyOn[0x2A] != 0 && !isModifierKey(c>>8&0x7F) {
+		lshiftAlone = false // a key pressed while it was down: keys held from before are W's run
+	}
 	if array {
 		c = keyArrayInput(c)
 	}
@@ -511,23 +511,10 @@ func moveMouse() {
 		if warpX < 0 {
 			return
 		}
-		if warpKey != 0 {
-			if keyOn[warpKey] == 0 {
-				mWarpRate >>= 1
-				if mWarpRate == 0 {
-					warpX = -1
-					warpKey = 0
-					return
-				}
-			} else if GameTime()-warpTime < 10 {
-				return
-			}
-		} else {
-			if GameTime()-warpTime < 10 {
-				return
-			}
-			mWarpRate = min(mWarpRate+8, 40)
+		if GameTime()-warpTime < 10 {
+			return
 		}
+		mWarpRate = min(mWarpRate+8, 40)
 		warpTime = GameTime()
 		axes := 3
 		for n := mWarpRate; n > 0 && axes != 0; n-- {
@@ -569,7 +556,6 @@ func moveMouse() {
 	mouseX = max(conX0, min(mouseX, maxX))
 	mouseY = max(conY0, min(mouseY, maxY))
 	if warpX == mouseX && warpY == mouseY {
-		warpKey = 0
 		warpX = -1
 	}
 	checkMouse()
@@ -650,9 +636,9 @@ func warpMouse(x, y int) {
 	}
 }
 
-// keyboardMouse moves the pointer from the keyboard (Tab, Shift+Tab, the keypad).
+// keyboardMouse moves the pointer from the keyboard: Tab and Shift+Tab hop between the view
+// and the panels.
 func keyboardMouse(key int) {
-	k := 0
 	x, y := mouseX, mouseY
 	switch key {
 	case KEY_SHIFT | KEY_BACKTAB:
@@ -681,50 +667,18 @@ func keyboardMouse(key int) {
 		default:
 			x = 0x14
 		}
-	case KEY_LEFT:
-		x, k = 0, 0x4B
-	case KEY_RIGHT:
-		x, k = 0x13F, 0x4D
-	case KEY_UP:
-		y, k = 0xC7, 0x48
-	case KEY_DOWN:
-		y, k = 0, 0x50
-	case KEY_HOME:
-		x, y, k = 0, 0xC7, 0x47
-	case KEY_PGUP:
-		x, y, k = 0x13F, 0xC7, 0x49
-	case KEY_END:
-		x, y, k = 0, 0, 0x4F
-	case KEY_PGDN:
-		x, y, k = 0x13F, 0, 0x51
 	default:
 		return
 	}
-	if k == warpKey && warpX >= 0 {
-		mWarpRate = min(mWarpRate+1, 40)
-	} else {
-		warpKey = k
-		if x != mouseX || y != mouseY {
-			warpMouse(x, y)
-		}
+	if x != mouseX || y != mouseY {
+		warpMouse(x, y)
 	}
 }
 
-// mouseBtns is the buttons held: the driver's, or Ins and Del for left and right.
+// mouseBtns is the buttons held.
 func mouseBtns() int {
-	b := 0
 	if !mouseOn {
-		b = 0
-	} else {
-		b = MBUTTONS()
+		return 0
 	}
-	if b == 0 {
-		if keyOn[0x52] != 0 {
-			b |= 1
-		}
-		if keyOn[0x53] != 0 {
-			b |= 2
-		}
-	}
-	return b
+	return MBUTTONS()
 }

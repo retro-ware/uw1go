@@ -3,9 +3,9 @@ package uw
 import "math"
 
 // Port of PHYSICS.C: the player's physics. The terrain the player stands in and the
-// movement state it gives (newFPS), the step-and-turn movement (simpleFizix), the
-// per-tick setup from the input (setPlayerPhysParams), applying MOTION's result to the
-// player object (physAffectPlayer), and placing the player on a tile (playerSetup).
+// movement state it gives (newFPS), the per-tick setup from the input (setPlayerPhysParams),
+// applying MOTION's result to the player object (physAffectPlayer), and placing the player
+// on a tile (playerSetup).
 //
 // The movement state: 0 on foot, 1 swimming, 2 on lava, 3 unused (ice), and in the air
 // 4 levitating, 5 flying, 6 slow falling. motionbits holds the motion spells (MB_*).
@@ -129,76 +129,6 @@ func playerChangeSq() {
 	ThePlayer.SetFineY(int(PN.Y>>5) & 7)
 }
 
-// simpleFizix is the step-and-turn movement: turn -1 or 1 turns 45 degrees; 0 steps
-// half a tile forward but not into a different terrain or off a ledge; 2 takes the same
-// step without those checks; -2 steps a quarter tile back. It reports whether the
-// player moved or turned.
-func simpleFizix(turn int) bool {
-	if PN.Acc[2] != 0 || PN.Speed >= MaxPlayerAccel {
-		return false
-	}
-	backwards, flying := false, false
-	var dist, heading int
-	switch turn {
-	case 2, 0:
-		backwards = turn == 2
-		dist = 0x80
-		heading = int(PlayerFacing) / 256
-	case -2:
-		dist = 0x40
-		heading = int(uint16(PlayerFacing+-0x8000) >> 8)
-	default:
-		if PlayerFacing&0x1FFF != 0 {
-			PlayerFacing = PlayerFacing&-0x2000 + int16(b2i(turn > 0))<<13
-		} else {
-			PlayerFacing += int16(turn << 13)
-		}
-		ThePlayer.SetHeading(int(PlayerFacing >> 13))
-		ThePlayer.SetFineHead(int(PlayerFacing >> 8))
-		return true
-	}
-	if motionbits&(MB_LEVITATE|MB_FLY) != 0 {
-		flying = true
-	}
-	x, y := PN.X, PN.Y
-	moveAlong(heading, dist, &x, &y)
-	if !canPlace(ITEM_ADVENTURER, 1, int(x/32), int(y/32), ThePlayer.Z(), backwards || flying, 8) {
-		return false
-	}
-	if !backwards && nvokTerr != FOOT_FLOOR && nvokTerr != lastTerr && (nvokTerr != FOOT_AIR || !flying) {
-		return false
-	}
-	PN.X, PN.Y = x, y
-	playerChangeSq()
-	if !(backwards || flying) || PN.Z>>3-8 <= nvokHgt {
-		ThePlayer.SetZ(int(nvokHgt))
-		PN.Z = nvokHgt << 3
-	} else if PN.Acc[2] == 0 && !flying {
-		PN.Acc[2] = -4
-	}
-	parsePlayerTerr(int(nvokTerr), false)
-	ThePlayer.SetFrame(int(GameTime()&0xFF) >> 6)
-	oldP := curP
-	var calc MotionCalc
-	curP = &calc
-	curP.index = 1
-	curP.radius = byte(ComObjData[ITEM_ADVENTURER].Radius())
-	curP.height = byte(ComObjData[ITEM_ADVENTURER].Height())
-	curP.x = x / 32
-	curP.y = y / 32
-	curP.z = int16(ThePlayer.Z())
-	ObjectCheck(false, false)
-	processObjlist()
-	for i := int(curP.first); i < int(curP.first)+int(curP.count); i++ {
-		obj := ObjPtrTMem(&oCollisions[i].link)
-		if obj.Item() == ITEM_MOVE_TRIGGER {
-			UseTrigger(ThePlayer, nil, obj, 0)
-		}
-	}
-	curP = oldP
-	return true
-}
-
 // setPlayerPhysParams sets PN up for a tick of rate time units from the input.
 func setPlayerPhysParams(rate int) {
 	speed := int16(0)
@@ -286,6 +216,7 @@ func playerSetup(x, y int) {
 	TerrainCheck(PN.B24)
 	PN.Terrain = setResterr(uint16(curP.hits0 | curP.hits1))
 	parsePlayerTerr(int(PN.Terrain), false)
+	Crouched, crouchAmt = false, 0
 	playerMod[0] = 0
 	parseEffect()
 	fizUpdate = true
@@ -346,10 +277,16 @@ func doPlayerInput(input, rate int, speed *int16) {
 		PlayerFacing += int16(rate * int(PlayerTurn) * int(TurnInpRate/4) / 4)
 		h = PlayerFacing
 		f := int(pFPS[0]) * int(ForwInpRate>>2) / 32
-		if MoveBack {
-			f -= int(pFPS[2])
+		back, side := int(pFPS[2]), int(MoveSide)*int(pFPS[1])
+		if !Running || Crouched { // walking: 12/28, as the walk's rate (0x32>>2) to the run's (0x70>>2)
+			back, side = back*3/7, side*3/7
 		}
-		side := int(MoveSide) * int(pFPS[1])
+		if Crouched { // crouching: half the walk
+			f, back, side = f/2, back/2, side/2
+		}
+		if MoveBack {
+			f -= back
+		}
 		if f != 0 || side != 0 {
 			// no faster on a diagonal than the faster of the two
 			off := int16(int32(math.Round(math.Atan2(float64(side), float64(f)) * 0x8000 / math.Pi)))

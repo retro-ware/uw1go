@@ -232,15 +232,15 @@ func parseStartInput(b []Button, text []string, sel int) int {
 			} else if hit >= n {
 				cur = hit - n
 			}
-		case KEY_RIGHT, KEY_DOWN, KEY_GRIGHT, KEY_GDOWN, KEY_CTRL | 'f', KEY_CTRL | 'n':
+		case KEY_GRIGHT, KEY_GDOWN, KEY_CTRL | 'f', KEY_CTRL | 'n':
 			cur++
-		case KEY_UP, KEY_LEFT, KEY_GUP, KEY_GLEFT, KEY_CTRL | 'b', KEY_CTRL | 'p':
+		case KEY_GUP, KEY_GLEFT, KEY_CTRL | 'b', KEY_CTRL | 'p':
 			cur--
 		case KEY_ENTER:
 			result = cur
-		case KEY_HOME, KEY_PGUP, KEY_GHOME, KEY_GPGUP, KEY_ALT | '<':
+		case KEY_GHOME, KEY_GPGUP, KEY_ALT | '<':
 			cur = 0
-		case KEY_END, KEY_PGDN, KEY_GEND, KEY_GPGDN, KEY_ALT | '>':
+		case KEY_GEND, KEY_GPGDN, KEY_ALT | '>':
 			cur = n - 1
 		case KEY_ESC:
 			if text != nil {

@@ -68,31 +68,21 @@ func initPlayer() {
 	inputAddkey('`', 0, 0x11, func(any) { mouseLookToggle() })
 	inputAddkey(KEY_ALT|'`', 0, 0x11, func(any) { mouseLookOrient() })
 	// UltimaHacks' keys (keys.go), its input-mode masks
-	inputAddkey(' ', 0, 1, ih(keyAttack))
-	inputAddkey('.', 3, 1, ih(keyAttack))
-	inputAddkey(';', 6, 1, ih(keyAttack))
-	inputAddkey('p', 9, 1, ih(keyAttack))
+	inputAddkey(' ', 0, 1, func(any) { keySpace() })
 	inputAddkey('r', 1, 1, ih(keyPanel))
 	inputAddkey('f', 2, 1, ih(keyPanel))
 	inputAddkey('q', 0, 1, ih(keyInteract))
 	inputAddkey('e', 1, 1, ih(keyInteract))
 	inputAddkey('z', 0, 1, func(any) { newscr(2) })
-	inputAddkey('c', 0, 1, ih(keyBag))
 	inputAddkey('v', 1, 1, ih(keyBag))
 	inputAddkey('b', 2, 1, ih(keyBag))
 	inputAddkey('g', 0, 1, func(any) { printInfo() })
 	inputAddkey('h', 0, 1, func(any) { keyFlasks() })
-	inputAddkey(KEY_CTRL|KEY_GUP, 0, 1, ih(playerSimpleMove)) // the grey arrows
-	inputAddkey(KEY_CTRL|KEY_GDOWN, -2, 1, ih(playerSimpleMove))
-	inputAddkey(KEY_CTRL|KEY_GLEFT, -1, 1, ih(playerSimpleMove))
-	inputAddkey(KEY_CTRL|KEY_GRIGHT, 1, 1, ih(playerSimpleMove))
 	inputAddkey('1', 1, 0x11, ih(chgPlyp))
 	inputAddkey(KEY_GUP, 1, 0x11, ih(chgPlyp))
 	inputAddkey('3', -1, 0x11, ih(chgPlyp))
 	inputAddkey(KEY_GDOWN, -1, 0x11, ih(chgPlyp))
-	inputAddkey(KEY_PAD5, 0, 0x11, ih(chgPlyp))
-	inputAddkey(KEY_SHIFT|keyLShift, 7, 0x11, ih(parsePlayin))          // jump, as j
-	inputAddkey(KEY_SHIFT|KEY_CTRL|keyLShift, 6, 0x11, ih(parsePlayin)) // standing long jump, as J
+	inputAddkey(KEY_SHIFT|keyLShift, 0, 0x11, func(any) { shiftTap() }) // run
 	// its rune keys
 	for c := 'a'; c <= 'y'; c++ {
 		inputAddkey(KEY_CTRL|KEY_ALT|int(c), int(c), 0x11, ih(keyRune))
@@ -105,18 +95,13 @@ func initPlayer() {
 	inputAddkey(KEY_F10, 0, 0x1B, ih(playerKeySleep))
 	inputAddkey(KEY_F9, 2, 0x1B, ih(func(n int) { playerUseSkill(n) }))
 	inputAddkey(KEY_F8, 1, 0x1B, ih(tryCast))
-	for _, c := range "srmfdq" {
+	for _, c := range "srmfq" {
 		k := KEY_CTRL | int(c)
 		inputAddkey(k, k, 1, ih(doOptionShortcut))
 	}
 	helpKeys() // F1 opens the help (help.go), Esc the options panel
-	inputAddkey(KEY_F2, 4, 1, ih(dealWithIcons))
-	inputAddkey(KEY_F3, 3, 1, ih(dealWithIcons))
-	inputAddkey(KEY_F4, 2, 1, ih(dealWithIcons))
 	inputAddkey(KEY_F5, 1, 1, ih(dealWithIcons))
-	inputAddkey(KEY_F6, 0, 1, ih(dealWithIcons))
-	for _, k := range []int{KEY_SHIFT | KEY_BACKTAB, '\t', KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT,
-		KEY_HOME, KEY_PGUP, KEY_END, KEY_PGDN, KEY_INS, KEY_DEL} {
+	for _, k := range []int{KEY_SHIFT | KEY_BACKTAB, '\t'} {
 		inputAddkey(k, k, 7, ih(keyboardMouse))
 	}
 	inputAddkey(KEY_ESC, 4, 4, ih(doEscapeKey))

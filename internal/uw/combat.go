@@ -501,12 +501,7 @@ func playerAttack(swing int) {
 			return
 		}
 		wd := weaponData
-		if weapFrame < 3 {
-			if !held {
-				finAttack()
-				pQatt = 0
-				attackKey = -1
-			}
+		if weapFrame < 3 { // the wind-up: let go during it, the blow still comes, uncharged
 			return
 		}
 		if weapFrame == 3 {

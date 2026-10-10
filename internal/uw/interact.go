@@ -465,7 +465,7 @@ const (
 )
 
 // player3dattack starts a blow while armed: the left button slashes, the right thrusts
-// (Space bashes, keyAttack). Each is charged while its button is held.
+// (Space bashes, keySpace). Each is charged while its button is held.
 func player3dattack() {
 	btn, swing := 1, swingSlash
 	if inplist.cmd&1 == 0 {
@@ -693,6 +693,9 @@ func dealWithIcons(mode int) {
 	}
 	if mode == 5 {
 		runOptionsPanel(1)
+		return
+	}
+	if mode != 1 { // only the fight icon: talk, get, look and use come from the context and Q, E
 		return
 	}
 	setScreenFrame(SCR_WEAPON, WEAP_SHEATHED)
