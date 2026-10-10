@@ -1,7 +1,5 @@
 package uw
 
-import "github.com/memmaker/uw1go/internal/r3d"
-
 // Port of GRIDDB.C: building the 3D view's render database from the map grid.
 // subprocess walks the visible cells of the vision grid from the farthest row to the eye
 // and grdbElem writes each tile's floor, ceiling, walls and diagonal face as model
@@ -61,11 +59,6 @@ var tile_mapcode = [16]byte{
 }
 var wall_nbr = [3]int{0, 1, 2}
 
-// seg009_38C is the segment of texture index i in the renderer's tables.
-func seg009_38C(i int) int { return int(r3d.R16(r3d.Seg051 + 0xC3EC + 2*i)) }
-
-func texFirstPixel(i int) byte { return r3d.Bytes(seg009_38C(i)<<4, 1)[0] }
-
 // setGraphicsLevel texture maps every face: the detail is always very high, the setting
 // gone from the options.
 func setGraphicsLevel() {
@@ -114,7 +107,8 @@ func processGridWith(walk func()) {
 		lighton = 0
 	}
 	frameHeader(0, 1-tmapson, v4)
-	r3d.SetPixXfer(1)
+	initRenderer()
+	rend.SetPickMode(false)
 	pipeexp = 0
 	walk()
 	if player.Level != 0 && player.Level < 0x10 && PlayerLevel != 9 {
@@ -135,7 +129,8 @@ func do3dPickup() {
 	grFcall = gftab[0]
 	grCcall = gctab[0]
 	grWcall = gwtab[0]
-	r3d.SetPixXfer(2)
+	initRenderer()
+	rend.SetPickMode(true)
 	sdXmod = quad_mod[quad][0]
 	sdYmod = quad_mod[quad][1]
 	subprocess()
@@ -237,7 +232,7 @@ func polywal(pts []byte, shade, height, tex byte) {
 	}
 }
 
-func bmhgtoff() int { return int(r3d.R16(r3d.Seg051 + 0xB000)) }
+func bmhgtoff() int { return rmemR16(0xB000) }
 
 // txtflr writes a texture-mapped floor or ceiling (with pts nil, only the texture set-up).
 func txtflr(pts []byte, shade, tex byte) {

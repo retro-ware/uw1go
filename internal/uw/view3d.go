@@ -4,13 +4,12 @@ import (
 	"time"
 
 	"github.com/memmaker/uw1go/internal/gr"
-	"github.com/memmaker/uw1go/internal/r3d"
 )
 
 // Port of VIEW3D.C: setting up and drawing a frame of the 3D view. setupVars turns the
 // camera into the first quadrant, do2dclip builds the vision grid and has GRIDDB.C's
 // processGrid write the frame's render database, and sendDb has the renderer (the
-// translated seg004, internal/r3d) run it into the frame buffer, which is then copied to
+// internal/render) run it into the frame buffer, which is then copied to
 // gr.FB and the screen.
 
 // gvec is an edge of the vision arc walking the grid. mapi is a tile index (it may leave
@@ -116,20 +115,19 @@ func place3dView(x, y, w, h int) {
 	} else {
 		curZoom = 0x7ED2
 	}
-	r3dInit()
-	r3d.CZoom(curZoom)
+	initRenderer()
+	rend.SetZoom(int(int16(curZoom)))
 }
 
 func cPlaceFB(x, y, w, h int) {
 	gr.PlaceFB(x, y, w, h)
-	r3dInit()
-	r3d.CPlaceFB(x, y, w, h)
+	initRenderer()
+	rend.Resize(w, h)
 }
 
 // setCyb is the hallucination effect: it scrambles the bitmap slots' masks.
 func setCyb(on bool) {
-	r3dInit()
-	p := r3d.Seg051 + int(r3d.R16(r3d.Seg051+0xB002)) + 2
+	p := rmemR16(0xB002) + 2
 	if cybOn == on {
 		return
 	}
@@ -141,14 +139,13 @@ func setCyb(on bool) {
 		if on {
 			v = rand() & masks[i]
 		}
-		r3d.W16(p+8*i, uint16(v))
+		rmemW16(p+8*i, v)
 	}
 }
 
 // init3d initialises the renderer and starts an empty render database.
 func init3d() {
-	r3dInit()
-	r3d.CInit3d()
+	initRenderer()
 	grdbBlank()
 	grTostrt()
 	grEntry()
@@ -174,14 +171,11 @@ func sendDb() {
 // view, and copies the result into gr.FB.
 func runRender() {
 	syncRender()
-	r3d.SetTheWindow(0, xhgt-1, xwid-1, 0)
 	t0 := time.Now()
-	r3d.CRender()
+	rend.Resize(xwid, xhgt)
+	rend.Render()
 	dprintf("render %v db %d bytes\n", time.Since(t0), dbptr-dbEntry)
-	r3d.SetTheWindow(0, 0xC7, 0x13F, 0)
-	if len(gr.FB) == gr.FBW*gr.FBH && gr.FBW > 0 {
-		r3d.CopyFB(gr.FB, gr.FBW, gr.FBH)
-	}
+	copyFB()
 }
 
 // do3dGrab renders a pick frame into the frame buffer without showing it.
