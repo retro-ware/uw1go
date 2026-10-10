@@ -115,14 +115,8 @@ func DoSaveRest(restore bool, slot int) {
 		if found&(1<<(slot-1)) == 0 {
 			msg = 1
 		} else if RestoreGame(slot) {
-			loadWeapcm()
 			msg = 2
-			displayScr()
-			realDScheck = true
-			initScrgr()
-			newFPS(-1)
-			fizUpdate = true
-			editchng(0x7FFE)
+			restoredGame()
 		} else {
 			msg = 3
 		}
@@ -132,6 +126,53 @@ func DoSaveRest(restore bool, slot int) {
 		msg = 5
 	}
 	gameSprint(msg + 0xA0)
+}
+
+// quickSlot is F5's and F7's slot, SAVE5, beside the four the options panel offers.
+const quickSlot = 5
+
+// quickSave, F5, saves to the quick slot without asking for a description.
+func quickSave() {
+	if GameInputMode != 0 {
+		gameSprint(0xA0) // "You cannot select options partway through an action."
+		return
+	}
+	setCreaturesToSavedGame()
+	scrollClear(true)
+	if saveToSlot(quickSlot, "Quick save") {
+		scrollPrint("Quick saved.\n")
+	} else {
+		gameSprint(0xA4)
+	}
+}
+
+// quickLoad, F7, restores the quick slot.
+func quickLoad() {
+	if GameInputMode != 0 {
+		gameSprint(0xA0)
+		return
+	}
+	if readFile(slotDir(quickSlot)+"desc") == nil {
+		scrollPrint("There is no quick save yet.\n")
+		return
+	}
+	if !RestoreGame(quickSlot) {
+		gameSprint(0xA3)
+		return
+	}
+	restoredGame()
+	scrollPrint("Quick loaded.\n")
+}
+
+// restoredGame redraws and resets after a restore.
+func restoredGame() {
+	loadWeapcm()
+	displayScr()
+	realDScheck = true
+	initScrgr()
+	newFPS(-1)
+	fizUpdate = true
+	editchng(0x7FFE)
 }
 
 func slotDir(slot int) string { return "SAVE" + string(rune('0'+slot)) + "\\" }
@@ -162,7 +203,6 @@ func RestoreGame(slot int) bool {
 // SaveGame asks for a description and saves to slot 1..4.
 func SaveGame(slot int, desc *string) bool {
 	setCreaturesToSavedGame()
-	dir := slotDir(slot)
 	scrollClear(true)
 	gameSprint(0xA8)
 	key, s := wdialog("", desc, true, 0x1E)
@@ -172,6 +212,12 @@ func SaveGame(slot int, desc *string) bool {
 	}
 	*desc = s
 	scrollPrint("\n")
+	return saveToSlot(slot, s)
+}
+
+// saveToSlot saves the game to slot with the description s.
+func saveToSlot(slot int, s string) bool {
+	dir := slotDir(slot)
 	gameSprint(0xA7)
 	if os.MkdirAll(dosPath(strings.TrimSuffix(dir, "\\")), 0o755) != nil || !clearDir(dir) ||
 		!blttodrive([]byte(s), "SAVE0\\desc") {

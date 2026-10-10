@@ -28,7 +28,7 @@ func keyFlasks() {
 	flaskInfo()
 }
 
-// keyPanel: r, f, to the rune bag (1) or the statistics (2), or back to the inventory when
+// keyPanel: r, k, to the rune bag (1) or the statistics (2), or back to the inventory when
 // it is showing (UltimaHacks' flipToPanel).
 func keyPanel(panel int) {
 	if RightPanel == panel {
@@ -37,7 +37,7 @@ func keyPanel(panel int) {
 	setScreenFrame(SCR_PANEL, panel)
 }
 
-// keyBag: v, b scroll the inventory down (1), up.
+// keyBag scrolls the inventory down (1) or up (b).
 func keyBag(how int) {
 	if how == 1 {
 		ScrollItemsDown()
