@@ -1,7 +1,5 @@
 package r3d
 
-import "os"
-
 // Perspective-correct texture mapping, which the DOS game does not have.
 //
 // UW1's two texture mappers, gfx_texture_poly_affine (WALLMAP.ASM: floors, ceilings and most
@@ -28,8 +26,11 @@ import "os"
 // texture's segment, +6 v's mask). It writes, as the originals do, the ring's end (07AB), its
 // last vertex (07A9), the vertices the walk may still use (07D1) and the row (07CF).
 
-// Perspective selects perspWalk over the original affine mappers. UW1GO_AFFINE=1 turns it off.
-var Perspective = os.Getenv("UW1GO_AFFINE") == ""
+// Perspective selects perspWalk over the original affine mappers, and FullSprites keeps a
+// sprite's height and position as with the view level (do_scalebm, TMAPOPS 6879 and 6898:
+// UltimaHacks' dontShrinkSprites). Both are always on; the translated code keeps the
+// original's path behind them.
+const Perspective, FullSprites = true, true
 
 const (
 	pRing    = 0x659

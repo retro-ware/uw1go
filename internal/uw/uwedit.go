@@ -108,7 +108,7 @@ func freeWorld(flag bool) {
 func titlescr() {
 	for mouseGetInput() > 3 {
 	}
-	runcutscene(9)
+	// no title sequence (UltimaHacks' skip)
 }
 
 func initEdit() {
@@ -131,6 +131,8 @@ func clearobj() {
 }
 
 func changeScreen(mode int) {
+	mouseLookScreen(true)
+	defer mouseLookScreen(false)
 	scrmode = mode
 	inplist.mode = mode
 	switch mode {

@@ -49,6 +49,10 @@ var (
 func AutoMap() {
 	if !automapRegistered {
 		inputAddkey(KEY_ESC, MODE_GAME, MODE_MAP, func(a any) { newscr(a.(int)) })
+		// UltimaHacks' map keys (keys.go)
+		inputAddkey('s', 1, MODE_MAP, ih(mapKey))
+		inputAddkey('w', -1, MODE_MAP, ih(mapKey))
+		inputAddkey('c', 2, MODE_MAP, ih(mapKey))
 		automapRegistered = true
 	}
 	setNewMusic(MUSIC_MAPS)

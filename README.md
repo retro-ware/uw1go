@@ -9,11 +9,37 @@ works).
 The port follows the decompiled source of
 [underworld-exhumed](https://github.com/memmaker/underworld-exhumed)
 function by function: one Go file per C file in `internal/uw`, the 3D
-engine machine-translated into `internal/r3d` (see `tools/c2go`). One
-thing differs from the DOS game on purpose: textures are mapped perspective-correct
-(`internal/r3d/persp.go`, after SiENcE's uwpatch), where the original
-maps them affinely, so walls bend and floors swim as you look around.
-`UW1GO_AFFINE=1` brings the original mapping back.
+engine machine-translated into `internal/r3d` (see `tools/c2go`). It is not a
+faithful replica, though: it always plays as a modernized game, with the changes below.
+
+## What is modern
+
+Most of it is John Glassmyer's
+[UltimaHacks](https://github.com/JohnGlassmyer/UltimaHacks) (MIT) for
+UW.EXE, as underworld-exhumed has it.
+
+- The game starts at the main menu, without the title sequence or the introduction (the menu still offers it), and the menu's cursor wraps around.
+- Textures are mapped perspective-correct (`internal/r3d/persp.go`, after SiENcE's uwpatch), so walls no longer bend and floors no longer swim.
+- You can look three times as far up and down, and the squares beside and behind you are drawn too. Creatures and objects keep their size when the view pitches.
+- Mouse look: `` ` `` turns it on and off. While it is on, the mouse turns the view and the cursor stays in the middle as a crosshair. `` Alt+` `` cycles through the axis inversions. `UW1GO_LOOK_SPEED` sets its speed in percent (10 to 400, default 100).
+- Sliding along a wall no longer turns the view, and the right-hand panel slides twice as fast.
+- The keys are UltimaHacks':
+
+| Keys | Action |
+| --- | --- |
+| `W` `S` / `X` | run, back / walk forward |
+| `A` `D` | slide left, right |
+| grey `←` `→` | turn |
+| `Ctrl` + grey arrows | step forward, back, left, right |
+| left `Shift` / `Ctrl` | fly up / down (while flying); a lone left `Shift` jumps, with `Ctrl` a standing long jump |
+| `1` `3` / grey `↑` `↓`, keypad `5` | look up, down, straight ahead |
+| `Space` | attack with the last attack type; `.` `;` `P` pick bash, slash, thrust |
+| `Q` / `E` | look at / use what is under the cursor |
+| `R` / `F` | the rune bag / statistics panel (again: back to the inventory) |
+| `C` `V` `B` | close the open container, scroll the inventory down, up |
+| `G` / `H` | game info / both flasks |
+| `Z` | the map; there `S` `W` go a level up, down and `C` back to the player's |
+| `Ctrl+Alt+letter` | put that rune on the shelf; `Ctrl+Alt+Backspace` clears the shelf, `Ctrl+Alt+Space` casts |
 
 ## Running
 

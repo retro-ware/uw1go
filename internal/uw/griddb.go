@@ -112,7 +112,11 @@ func frameHeader(v9, v8, v4 int) {
 }
 
 // processGrid writes the database for a normal frame.
-func processGrid() {
+func processGrid() { processGridWith(subprocess) }
+
+// processGridWith writes the header and has walk write the squares (wide-pitch's two passes,
+// viewPasses, walk the grid twice).
+func processGridWith(walk func()) {
 	oldlight := lighton
 	AnimObjInPipe = 0
 	flatCase = cPlayer.pitch == 0 && cPlayer.bank == 0
@@ -128,7 +132,7 @@ func processGrid() {
 	frameHeader(0, 1-tmapson, v4)
 	r3d.SetPixXfer(1)
 	pipeexp = 0
-	subprocess()
+	walk()
 	if player.Level != 0 && player.Level < 0x10 && PlayerLevel != 9 {
 		if exp := pipeexp * PlayerLevel / 10; exp != 0 {
 			playerGetExp(exp)
@@ -195,6 +199,9 @@ func subprocess() {
 		gl -= 33
 		row -= dy
 		idx -= dy
+	}
+	if drawingBehind { // the back pass leaves the automap alone
+		return
 	}
 	tmptr, i = row, idx
 	for loopx = 0; loopx < 0x21; loopx, tmptr, i = loopx+1, tmptr+dx, i+dx {
@@ -342,10 +349,13 @@ func txtwal(pts []byte, shade, height, tex byte) {
 
 // grdbElem writes one tile, the one at tmptr in grid cell pGloc.
 func grdbElem(automap *byte) {
+	if queueFull() { // wide-pitch: the two passes keep the queue back from its end
+		return
+	}
 	t := tileAt(tmptr)
 	flags := int(glocs[pGloc].flags)
 	if flags&GLOC_SEEN == 0 {
-		if *automap == 0 {
+		if *automap == 0 && !drawingBehind {
 			*automap = tile_mapcode[t.Type()]
 			pipeexp++
 		}
@@ -434,6 +444,9 @@ func grdbElem(automap *byte) {
 			pts[3] = pt(loopx+int(d[0]), loopy+int(d[1]), int(ht))
 			grWcall(pts[:], sqmod, 0x10-ht, byte(t.Wall()))
 		}
+	}
+	if drawingBehind { // no objects behind the player, and the automap left alone
+		return
 	}
 	doObjsort(&t.Objects)
 	if curautocode != 0 {

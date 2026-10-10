@@ -24,6 +24,11 @@ var (
 
 	mouseMoves = [3]int16{PIN_LEFT, PIN_BACK, PIN_RIGHT}
 	moveKeys   = [9]byte{0x11, 0x1F, 0x1E, 0x20, 0x2C, 0x2E, 0x2D, 0x12, 0x10}
+	// UltimaHacks' movementKeys, the key held for each of moveKeys' meanings (run,
+	// walk, turn left, turn right, slide left, slide right, back, fly up, fly down): w, x, the
+	// grey Left and Right (0x69 and 0x6A in keyOn: KEY puts E0 keys at 0x60 and up), a, d, s,
+	// left Shift, left Ctrl
+	modernKeys = [9]byte{0x11, 0x2D, 0x69, 0x6A, 0x1E, 0x20, 0x1F, 0x2A, 0x1D}
 
 	lastTime   uint32
 	frameInc   byte
@@ -103,16 +108,15 @@ func parsePlayin(command int) {
 	}
 }
 
-// doPlayerKeyboard reads the movement keys held down. Ignored with exactly one of Shift
-// and Caps Lock (the capitals are the step moves), or with Alt or Ctrl.
+// doPlayerKeyboard reads the movement keys held down (UltimaHacks' keys, modernKeys), with
+// Shift or Ctrl held too (its fly keys) but not with both Alt and Ctrl (the rune keys).
 func doPlayerKeyboard() {
 	TurnInpRate, ForwInpRate = 0, 0
-	caps := capsLock&1 != 0
-	if shiftDown() != caps || altDown() || ctrlDown() {
+	if altDown() && ctrlDown() {
 		return
 	}
-	for _, k := range moveKeys {
-		if keyOn[k] == 0 {
+	for i, k := range moveKeys {
+		if keyOn[modernKeys[i]] == 0 {
 			continue
 		}
 		switch k {
@@ -138,15 +142,11 @@ func doPlayerKeyboard() {
 			TurnInpRate, ForwInpRate = 0, 0
 			PlayerInput = PIN_RIGHT
 		case 0x12:
-			if motionbits&(MB_LEVITATE|MB_FLY) == 0 {
-				PlayerInput = PIN_NONE
-			} else {
+			if motionbits&(MB_LEVITATE|MB_FLY) != 0 { // UltimaHacks' fly keys do nothing on the ground
 				PlayerInput = PIN_UP
 			}
 		case 0x10:
-			if motionbits&(MB_LEVITATE|MB_FLY) == 0 {
-				PlayerInput = PIN_NONE
-			} else {
+			if motionbits&(MB_LEVITATE|MB_FLY) != 0 {
 				PlayerInput = PIN_DOWN
 			}
 		}

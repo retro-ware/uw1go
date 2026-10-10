@@ -65,6 +65,12 @@ var (
 func MOUSE() {
 	host.Busy()
 	mouseDx, mouseDy = 0, 0
+	if lookOn { // mouse-look: the captured pointer's motion
+		mouseDx, mouseDy = host.LookDX, host.LookDY
+		host.LookDX, host.LookDY = 0, 0
+		host.MouseMoved = false
+		return
+	}
 	if host.MouseMoved {
 		host.MouseMoved = false
 		mouseDx = host.MouseX - mouseX
@@ -289,7 +295,28 @@ func doKeyarrayInput() int {
 
 // doKeyboardInput reads a key and returns its input code (with KEY_SHIFT, KEY_ALT and
 // KEY_CTRL), or -1.
+// keyLShift is the code a lone left Shift gives (UltimaHacks' jump), unused by the game.
+const keyLShift = 0xBF
+
+var lshiftWas bool
+
 func doKeyboardInput(array bool) int {
+	// UltimaHacks binds a press of the left Shift. It has no character, so KEY never gives it;
+	// a new press is seen in keyOn (0x2A, its scan code) and given with the modifiers held.
+	now := keyOn[0x2A] != 0
+	pressed := now && !lshiftWas
+	lshiftWas = now
+	if pressed {
+		keyTime = GameTime()
+		c := keyLShift | KEY_SHIFT
+		if altDown() {
+			c |= KEY_ALT
+		}
+		if ctrlDown() {
+			c |= KEY_CTRL
+		}
+		return c
+	}
 	c := KEY()
 	if array {
 		c = doKeyarrayInput()
@@ -500,6 +527,16 @@ func moveMouse() {
 	if actualMhide() {
 		mouseSaved = false
 	}
+	if lookOn && inplist.mode&0x11 == 0 {
+		// the view gone without changeScreen (realDeath sets the mode itself, for the main
+		// menu): mouse-look off, remembered for the view's return, so the pointer moves
+		lookWas = true
+		mouseLookSet(false)
+	}
+	if lookOn { // mouse-look turns the view instead
+		mouseLookStep(dx, dy)
+		dx, dy = 0, 0
+	}
 	mouseX += dx
 	mouseY -= dy
 	mouseX = max(conX0, min(mouseX, maxX))
@@ -592,7 +629,7 @@ func keyboardMouse(key int) {
 	x, y := mouseX, mouseY
 	switch key {
 	case KEY_SHIFT | KEY_BACKTAB:
-		if warpX >= 0 {
+		if warpX >= 0 || lookOn { // mouse-look holds the pointer
 			return
 		}
 		y = 0x82
@@ -605,7 +642,7 @@ func keyboardMouse(key int) {
 			x = 0x82
 		}
 	case 9:
-		if warpX >= 0 {
+		if warpX >= 0 || lookOn {
 			return
 		}
 		y = 0x82

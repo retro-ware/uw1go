@@ -1,6 +1,9 @@
 package host
 
 import (
+	"os"
+	"strconv"
+
 	"github.com/hajimehoshi/ebiten/v2"
 )
 
@@ -69,6 +72,17 @@ var (
 	MouseButtons   int // bit 0 left, bit 1 right
 	// MouseDX, MouseDY accumulate relative motion (for a captured pointer)
 	MouseDX, MouseDY int
+	// MouseLook is set by the game while the mouse turns the view: the pointer is captured and
+	// its motion, in screen pixels times LookSpeed/100, adds to LookDX, LookDY instead of
+	// moving MouseX, MouseY.
+	MouseLook      bool
+	LookDX, LookDY int
+	LookSpeed      = 100
+
+	lookCaptured   bool
+	lookSettle     int // ticks after a capture change whose motion is dropped
+	lookFX, lookFY float64
+	lastCX, lastCY int
 )
 
 func pushScan(s scan, up bool) {
@@ -111,7 +125,33 @@ func pollInput(g *game) {
 	}
 
 	cx, cy := ebiten.CursorPosition()
-	if g.scaleX > 0 {
+	if MouseLook != lookCaptured {
+		lookCaptured = MouseLook
+		if MouseLook {
+			ebiten.SetCursorMode(ebiten.CursorModeCaptured)
+		} else {
+			ebiten.SetCursorMode(ebiten.CursorModeHidden)
+		}
+		lookSettle, lookFX, lookFY = 2, 0, 0
+	}
+	dcx, dcy := cx-lastCX, cy-lastCY
+	lastCX, lastCY = cx, cy
+	if lookSettle > 0 {
+		lookSettle--
+		dcx, dcy = 0, 0
+	}
+	if MouseLook {
+		if g.scaleX > 0 {
+			k := float64(LookSpeed) / 100
+			lookFX += float64(dcx) / g.scaleX * k
+			lookFY += float64(dcy) / g.scaleY * k
+			ix, iy := int(lookFX), int(lookFY)
+			lookFX -= float64(ix)
+			lookFY -= float64(iy)
+			LookDX += ix
+			LookDY += iy
+		}
+	} else if g.scaleX > 0 {
 		x := int((float64(cx) - g.offX) / g.scaleX)
 		y := int((float64(cy) - g.offY) / g.scaleY)
 		if x < 0 {
@@ -153,5 +193,12 @@ func AddTimer(f func()) { timers = append(timers, f) }
 func tickTimers() {
 	for _, f := range timers {
 		f()
+	}
+}
+
+func init() {
+	// UW1GO_LOOK_SPEED: mouse-look's speed, a percentage (10 to 400)
+	if n, err := strconv.Atoi(os.Getenv("UW1GO_LOOK_SPEED")); err == nil {
+		LookSpeed = max(10, min(n, 400))
 	}
 }

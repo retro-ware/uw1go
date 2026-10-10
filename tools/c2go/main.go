@@ -702,7 +702,7 @@ var globals = map[string]ty{
 	"pDS": tBase, "pES": tBase, "pSS": tBase,
 	"CODE000": tBase, "CODE001": tBase, "CODE002": tBase, "CODE003": tBase, "CODE004": tBase, "CODE015": tBase, "CODE019": tBase,
 	"c": tU32, "entry": tU16,
-	"Perspective": tBool,
+	"Perspective": tBool, "FullSprites": tBool,
 }
 
 type emitter struct {
@@ -1176,7 +1176,7 @@ func collectGotos(ss []*stmt, used map[string]bool) {
 // ---------------------------------------------------------------- main
 
 // fixups for the port's hand edits: the enhancements and test probes are off
-// in this port but for the perspective-correct mappers (internal/r3d/persp.go),
+// in this port but for the perspective-correct mappers (internal/r3d/persp.go) and full sprites,
 // and the few C objects become runtime calls.
 var fixups = []struct{ re, repl string }{
 	{`\(void\)\w+;`, ``},
@@ -1184,6 +1184,7 @@ var fixups = []struct{ re, repl string }{
 	{`persp_probe_next\(\);`, ``},
 	{`if \(ENHANCED\(ENH_PERSPECTIVE\)\) \{ persp_walk\(0\);`, `if (Perspective) { perspAffine();`}, // persp.go
 	{`if \(ENHANCED\(ENH_PERSPECTIVE\)\) \{ persp_walk\(1\);`, `if (Perspective) { perspWall();`},
+	{`if \(ENHANCED\(ENH_FULL_SPRITES\)\) \{`, `if (FullSprites) {`}, // uw.enhance
 	{`if \(ENHANCED\([A-Z_]+\)\) \{[^\n]*\}\s*(/\*[^\n]*\*/)?\s*\n\s*else `, "\n    "},
 	{`if \(ENHANCED\([A-Z_]+\)\) \{[^\n]*\}[^\n]*\n`, "\n"},
 	{`persp_probe\(\) \? persp_probe_colour : `, ``},
