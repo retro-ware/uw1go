@@ -9,7 +9,11 @@ works).
 The port follows the decompiled source of
 [underworld-exhumed](https://github.com/memmaker/underworld-exhumed)
 function by function: one Go file per C file in `internal/uw`, the 3D
-engine machine-translated into `internal/r3d` (see `tools/c2go`).
+engine machine-translated into `internal/r3d` (see `tools/c2go`). One
+thing differs from the DOS game on purpose: textures are mapped perspective-correct
+(`internal/r3d/persp.go`, after SiENcE's uwpatch), where the original
+maps them affinely, so walls bend and floors swim as you look around.
+`UW1GO_AFFINE=1` brings the original mapping back.
 
 ## Running
 

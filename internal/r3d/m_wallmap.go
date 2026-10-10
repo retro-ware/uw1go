@@ -976,6 +976,12 @@ L01F0:
 	SP = rw(pDS, 0x5586)
 L01F4:
 L01F5:
+	if Perspective {
+		{
+			perspAffine()
+			goto L0363
+		}
+	}
 	AX = 0xE
 L01F8:
 	AX = CX
