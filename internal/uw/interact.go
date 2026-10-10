@@ -465,40 +465,16 @@ const (
 	actTalk = 4
 )
 
-// contextAction is what a left click (or E) does to newPlObj, just picked, when no icon
-// says otherwise. There is no overlap: a creature is talked to, a thing that can be carried
-// is taken, a fixture that works (doors, levers and buttons, chests, the shrine, fountains)
-// is used, and the rest is looked at. A trigger on the object decides first, so that a
-// puzzle's look or use trigger still fires. Out of reach a take or use is a look.
+// contextAction is what a left click does to newPlObj, just picked, when no icon says
+// otherwise: a creature is talked to, a thing that can be carried and is in reach is taken,
+// and anything else is looked at. Using is the right button's (and E's).
 func contextAction() int {
 	o := newPlObj
-	item := o.Item()
-	if IsMobElem(o) && o.Major() == MAJOR_CREATURE || item == ITEM_SOUND_SOURCE { // as UltimaHacks' E
+	if IsMobElem(o) && o.Major() == MAJOR_CREATURE || o.Item() == ITEM_SOUND_SOURCE { // as UltimaHacks' E
 		return actTalk
 	}
-	if !InPickRange(PickDist, o, PickMap) || BlockingTerrain(PickDist, o) {
-		return actLook
-	}
-	if releaseable {
+	if releaseable && InPickRange(PickDist, o, PickMap) && !BlockingTerrain(PickDist, o) {
 		return actGet
-	}
-	if o.IsQuant() == 0 && o.LinkF() != 0 {
-		link := &o.OL
-		if t := ObjInList(&link, false, MAJOR_TRAP, -1, -1); t != nil {
-			switch t.Item() {
-			case ITEM_USE_TRIGGER:
-				return actUse
-			case ITEM_LOOK_TRIGGER:
-				return actLook
-			}
-		}
-	}
-	switch {
-	case o.Major() == MAJOR_RECT && o.Minor() != 1, // doors, levers, switches, buttons, writing
-		item == ITEM_SHRINE, item == ITEM_BARREL, item == ITEM_CHEST, item == ITEM_URN,
-		item == ITEM_ANVIL, item == ITEM_FOUNTAIN_12E, item == ITEM_FOUNTAIN_1C9,
-		item == ITEM_CAULDRON, item == ITEM_SILVER_TREE, item == ITEM_MOVING_DOOR:
-		return actUse
 	}
 	return actLook
 }
@@ -515,8 +491,9 @@ func actOn(how int) {
 func armed() bool { return RightButtonThing == IMODE_FIGHT && player.Drawn() != 0 }
 
 // mousIn3d is the 3D view's mouse handler. The buttons never walk (the keys do). The left
-// acts on what is under the pointer, as the selected icon says or by context, and drops or
-// throws what is carried; the right looks. While armed the left slashes, the right thrusts.
+// talks to or takes what is under the pointer (or does what the selected icon says), looks
+// at anything else, and drops or throws what is carried; the right uses. While armed the
+// left slashes, the right thrusts.
 func mousIn3d(int) {
 	if inplist.mode != MODE_GAME {
 		if inplist.mode == 0x10 && inplist.cmd == 2 {
@@ -539,7 +516,7 @@ func mousIn3d(int) {
 	}
 	switch GameInputMode {
 	case GIM_NONE:
-		how := actLook
+		how := actUse
 		if left {
 			how = -1
 			if RightButtonThing != IMODE_DEFAULT && RightButtonThing != IMODE_FIGHT {
@@ -548,7 +525,9 @@ func mousIn3d(int) {
 		}
 		newPlObj = pick3d(2)
 		if newPlObj == nil {
-			lookNothing(max(how, actLook), pTxtId)
+			if how != actUse {
+				lookNothing(max(how, actLook), pTxtId)
+			}
 			mouseRelease(true)
 			break
 		}
