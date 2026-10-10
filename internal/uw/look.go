@@ -55,6 +55,7 @@ func LookAt(obj *Object, lore int) {
 		n, _ := getName(obj, first == 0, plural)
 		text += n
 		doOf(obj, lore, &text)
+		text += statSuffix(obj, lore)
 		if com.CanOwn() != 0 && obj.Owner() > 0 && obj.Owner()&0x1F <= 0x1B {
 			text += " belonging to"
 			text += getString((obj.Owner()&0x1F + 0x172) | STR_GAME)
@@ -64,6 +65,64 @@ func LookAt(obj *Object, lore int) {
 		rectLook(obj, lore)
 	}
 	specialLook(obj, lore)
+}
+
+// statSuffix notes what a weapon or armour does, after Angband. A melee weapon: its damage
+// by attack type, (slash/bash/thrust), as doPlayerWeapon takes it. Ammunition: the damage
+// of a shot, (n), before the missile skill scales it (missileNewhit); a launcher: that of
+// the ammunition it fires. Armour: its protection at its quality, [n], as FixPlayerEquips
+// counts it. Once identified (lore 3, when doOf names the enchantment), a weapon's
+// enchantment shows as (+accuracy,+damage) and armour's as [n,+toughness] or, for
+// Protection, which makes the wearer harder to hit, (+n) after it.
+func statSuffix(o *Object, lore int) string {
+	if o.Major() != MAJOR_HACK {
+		return ""
+	}
+	itoa := strconv.Itoa
+	ench, second := 0, false // the enchantment's +n; second: Damage on a weapon, Toughness on armour
+	if lore == 3 {
+		var major, effect int
+		var flag bool
+		alwaysDecode = true
+		found := decodeObjSpell(o, &major, &effect, &flag)
+		alwaysDecode = false
+		if found && !flag && major == 12 {
+			ench, second = effect&7+1, effect&8 != 0
+		}
+	}
+	switch o.Minor() {
+	case MINOR_WEAPON:
+		d := Weapons[o.InClass()].Damage
+		s := " (" + itoa(int(d[0])) + "/" + itoa(int(d[1])) + "/" + itoa(int(d[2])) + ")"
+		switch {
+		case ench > 0 && second:
+			s += " (+0,+" + itoa(ench) + ")"
+		case ench > 0:
+			s += " (+" + itoa(ench) + ",+0)"
+		}
+		return s
+	case MINOR_MISSILE:
+		m := Missile[o.InClass()]
+		if m.Ammo >= 0 && m.Ammo < 0x10 { // a launcher
+			m = Missile[m.Ammo]
+		}
+		if m.Ammo != -64 { // not something the player shoots or throws (the spells)
+			return ""
+		}
+		return " (" + itoa(int(m.Damage)) + ")"
+	case MINOR_ARMOR, MINOR_ARMOR2:
+		if o.Minor() == MINOR_ARMOR2 && (o.InClass() < 11 || o.InClass() > 15) {
+			return "" // crowns and rings, which protect nothing
+		}
+		switch {
+		case ench > 0 && second:
+			return " [" + itoa(armorVal(o)) + ",+" + itoa(ench) + "]"
+		case ench > 0:
+			return " [" + itoa(armorVal(o)) + "] (+" + itoa(ench) + ")"
+		}
+		return " [" + itoa(armorVal(o)) + "]"
+	}
+	return ""
 }
 
 // article is "an " before a vowel, else "a ".
