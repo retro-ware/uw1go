@@ -427,7 +427,8 @@ func countList(obj *Object, counts []byte) bool {
 
 var objlistComplained bool
 
-func seg027_2861_EF9() {
+// checkObjList complains once when the object store is inconsistent.
+func checkObjList() {
 	if !ObjListOkay(false) {
 		if !objlistComplained {
 			errmsg("Problems in", "object list")

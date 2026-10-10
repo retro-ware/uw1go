@@ -1,7 +1,5 @@
 package render
 
-import "math"
-
 // The interpreter (INTERP.ASM, TMAPOPS.ASM, PGCACHE.ASM, SPHERE.ASM's object header). A
 // program is a stream of words: an opcode, then its operands. Point operands are point
 // numbers times 8 (offsets into the original's point table); offsets are relative to the
@@ -122,15 +120,6 @@ func (r *Renderer) runAt(pc, depth int) {
 				c.pc += skip
 			}
 
-		case 0x38: // do_obj: an object's header
-			if !c.object() {
-				return
-			}
-		case 0x18: // org: the object's origin, 32-bit world coordinates
-			for i := 0; i < 3; i++ {
-				w := int32(uint32(c.word()) | uint32(c.word())<<16)
-				r.obj[i] = r.eye[i] - float64(w)
-			}
 		case 0x4A: // rorg: move the origin
 			for i := 0; i < 3; i++ {
 				r.obj[i] -= float64(c.sword())
@@ -255,24 +244,8 @@ func (r *Renderer) runAt(pc, depth int) {
 
 		case 0xAE: // setbmcol: the pick colour
 			r.bmcolor = byte(c.word())
-		case 0xB0: // mouseq
-			if r.Art != nil {
-				r.Art.MouseQ()
-			}
 		case 0xB2: // set_tmctxt
 			r.setCtxt(c.word() & 0xFF)
-		case 0xD0: // set_gmap_ctxt: the g-map context's mapping style
-			r.mapWall = c.word()&0xFF != 0
-		case 0x3E: // fetchmap: a level texture into a slot
-			slot, tex := c.word(), c.word()
-			c.word()
-			if s := slot & 0xFF; s < slotCount && r.Art != nil {
-				r.slots[s] = r.Art.Texture(tex & 0xFF)
-			}
-		case 0xC0: // settmobj: an object's picture into slot 6
-			slot := c.word()
-			c.word()
-			r.tmobj(slot)
 
 		case 0x36, 0x34, 0x9E: // tmap, wtmap, tmap_tri: corners given
 			n := 4
@@ -280,44 +253,26 @@ func (r *Renderer) runAt(pc, depth int) {
 				n = 3
 			}
 			slot := c.word() & 0xFF
-			r.setCtxt(slot)
 			poly := make([]vtx, n)
-			w, vl := r.slotSize(slot)
+			corners := make([]int, n)
 			for i := range poly {
 				p := c.pt()
-				corner := c.word()
-				u, v := 0.0, 0.0
-				if corner&1 != 0 {
-					u = w
-				}
-				if corner >= 2 {
-					v = vl
-				}
-				poly[i] = vtx{v: p.v, codes: p.codes, u: u, t: v}
+				poly[i] = vtx{v: p.v, codes: p.codes}
+				corners[i] = c.word()
 			}
-			r.texPoly(slot, poly)
+			r.cornerPoly(slot, poly, corners)
 		case 0xA0, 0xA2, 0xA4, 0xA6: // compact_tmap, compact_wtmap: a quad, corners implied
 			slot := c.word() & 0xFF
-			r.setCtxt(slot)
-			w, vl := r.slotSize(slot)
 			poly := make([]vtx, 4)
 			for i := range poly {
 				p := &r.pts[c.byte_()]
-				cl := 4 - i // the corners: (0, 0), (w, 0), (w, vl), (0, vl)
-				left := (cl-2)&2 != 0
-				if op >= 0xA4 {
-					left = !left
-				}
-				u, v := w, 0.0
-				if left {
-					u = 0
-				}
-				if (cl-1)&2 == 0 {
-					v = vl
-				}
-				poly[i] = vtx{v: p.v, codes: p.codes, u: u, t: v}
+				poly[i] = vtx{v: p.v, codes: p.codes}
 			}
-			r.texPoly(slot, poly)
+			corners := compactCorners
+			if op >= 0xA4 {
+				corners = mirroredCorners
+			}
+			r.cornerPoly(slot, poly, corners[:])
 		case 0xA8, 0xAA, 0xB4, 0xCE: // gtmap, gwtmap, ctxt_gtmap, ctxt_gmap: fractions
 			slot := r.ctxtSlot()
 			if op == 0xA8 || op == 0xAA {
@@ -334,24 +289,6 @@ func (r *Renderer) runAt(pc, depth int) {
 			}
 			r.texPoly(slot, poly)
 		case 0xAC: // gtri: nothing
-
-		case 0x3A: // uwobj: an object's sprite
-			typ, shade := c.word(), c.word()
-			p := c.pt()
-			if r.Art != nil {
-				if pic, ok := r.Art.ObjectPic(typ, shade); ok {
-					pic.HotX, pic.HotY = int(r.Mem[objRecord+6]), int(r.Mem[objRecord+8])
-					r.sprite(p.v, pic, r.s16(objRecord+0x0A), r.s16(objRecord+0x0C))
-				}
-			}
-		case 0x5A: // uwcrit: a critter's frame
-			typ, shade, frame, variant := c.word(), c.word(), c.word(), c.word()
-			p := c.pt()
-			if r.Art != nil {
-				if pic, ok := r.Art.CritterPic(typ, shade, frame, variant); ok {
-					r.sprite(p.v, pic, r.s16(critRecord+0x0A), r.s16(critRecord+0x0C))
-				}
-			}
 
 		default:
 			r.complain("render: opcode %02X at %04X\n", op, at)
@@ -394,77 +331,12 @@ func (r *Renderer) turn(a int16) {
 	r.obj[2] = x*s + z*co
 }
 
-// object is do_obj, an object's header: skip, shift, then (extent, 32-bit coordinate) for
-// x, y and z, then the radius. It sets the origin and the point shift, or skips the object
-// when it is out of reach or out of view; false ends the program (never: a skip goes on
-// after the object).
-func (c *vm) object() bool {
-	r := c.r
-	end := c.target()
-	shift := c.sword()
-	var rel vec3
-	ok := true
-	bits := 0
-	for i := 0; i < 3; i++ {
-		ext := c.sword()
-		w := int64(int32(uint32(c.word()) | uint32(c.word())<<16))
-		d := w - int64(math.Floor(r.eye[i]))
-		if shift >= 0 {
-			d >>= uint(shift)
-		} else {
-			d <<= uint(-shift)
-		}
-		if d != int64(int16(d)) {
-			ok = false
-		}
-		rel[i] = (float64(w) - r.eye[i]) / math.Ldexp(1, shift)
-		bits |= int(abs(d)) + ext
-	}
-	radius := c.sword()
-	if !ok || bits > 0x7FFF {
-		c.pc = end
-		return true
-	}
-	// The point shift keeps the most precision: 15 less the bit length.
-	r.objShift = max(15-bitLen(bits), 0)
-	r.obj = vec3{-rel[0], -rel[1], -rel[2]}
-	// Out of view: the bounding sphere wholly outside one side of the view.
-	centre := r.rotate(rel)
-	rad := float64(radius) * math.Ldexp(1, r.objShift) * r.maxScale()
-	if outside(centre, rad) {
-		c.pc = end
-	}
-	return true
-}
-
-func abs(v int64) int64 {
-	if v < 0 {
-		return -v
-	}
-	return v
-}
-
 func bitLen(v int) int {
 	n := 0
 	for ; v > 0; v >>= 1 {
 		n++
 	}
 	return n
-}
-
-// maxScale is the largest the matrix makes a unit.
-func (r *Renderer) maxScale() float64 {
-	m := 0.0
-	for a := 0; a < 3; a++ {
-		m = max(m, math.Sqrt(r.m[a][0]*r.m[a][0]+r.m[a][1]*r.m[a][1]+r.m[a][2]*r.m[a][2]))
-	}
-	return m
-}
-
-// outside: a sphere wholly behind the eye or beyond one of the view's four sides.
-func outside(c vec3, rad float64) bool {
-	const k = math.Sqrt2
-	return c[2] < -rad || c[0]-c[2] > rad*k || -c[0]-c[2] > rad*k || c[1]-c[2] > rad*k || -c[1]-c[2] > rad*k
 }
 
 // box is do_parapiped: point, three half extents, offset. The eight corners of the box
@@ -525,12 +397,10 @@ func (r *Renderer) setCtxt(slot int) { r.W16(slotTab-2, uint16(slotTab+slot*8)) 
 
 func (r *Renderer) ctxtSlot() int { return (int(r.R16(slotTab-2)) - slotTab) / 8 & 0xFF }
 
-// tmobj puts graphics slot n's picture into texture slot 6.
-func (r *Renderer) tmobj(n int) {
-	if r.Art == nil {
-		return
-	}
-	b := r.Art.GrPic(n)
+// SetObjectTexture puts a picture in its stored form (format, width, height, size, then
+// one byte a pixel) into texture slot 6, for the models that are textured with an
+// object's picture (do_settmobj).
+func (r *Renderer) SetObjectTexture(b []byte) {
 	if len(b) < 5 {
 		return
 	}
@@ -545,4 +415,29 @@ func (r *Renderer) tmobj(n int) {
 	px := make([]byte, size)
 	copy(px, b[min(5, len(b)):])
 	r.slots[6] = px
+}
+
+// The corners of a texture: bit 0 the right edge (u = the width), 2 and up the bottom
+// (v = the v limit). The compact opcodes' quads go round the texture from its top left; the
+// mirrored ones (bcompact) swap left and right.
+var (
+	compactCorners  = [4]int{0, 1, 3, 2}
+	mirroredCorners = [4]int{1, 0, 2, 3}
+)
+
+// cornerPoly draws a polygon textured from slot, each vertex at a corner of the texture,
+// and makes slot the context slot.
+func (r *Renderer) cornerPoly(slot int, poly []vtx, corners []int) {
+	r.setCtxt(slot)
+	w, vl := r.slotSize(slot)
+	for i := range poly {
+		poly[i].u, poly[i].t = 0, 0
+		if corners[i]&1 != 0 {
+			poly[i].u = w
+		}
+		if corners[i] >= 2 {
+			poly[i].t = vl
+		}
+	}
+	r.texPoly(slot, poly)
 }

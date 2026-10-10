@@ -134,7 +134,7 @@ func closeOptionPanel() {
 func drawTopPage() {
 	drawOptionsBack(1)
 	reloadGrVpic(ICON_OPTB, "optbtns", 3)
-	gr.ShowBlock(slotVram(grsWhich1(ICON_OPTB)), 4, 0xBD-92, 0x23, 0x6C, 0, 92)
+	slotVram(grsWhich1(ICON_OPTB)).Show(4, 0xBD-92, 0x23, 0x6C, 0, 92)
 	drawOptionsBtn(2, 0x10)
 	drawOptionsBtn(1, 0x12)
 	hilitePic = -1

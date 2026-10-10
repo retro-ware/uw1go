@@ -120,10 +120,3 @@ func dprintf(format string, args ...any) {
 		fmt.Fprintf(os.Stderr, format, args...)
 	}
 }
-
-// seg041_35D7_E9 waits until ticks more of the game clock have passed.
-func seg041_35D7_E9(ticks int) {
-	start := GameTime()
-	for GameTime() < start+uint32(ticks) {
-	}
-}

@@ -113,7 +113,7 @@ func ExitAutoMap() {
 		GetAutoMapLevel(&arc, PlayerLevel)
 		closeArc(&arc)
 	}
-	seg014_1DC5_15C5()
+	setRandomWalkingMusic()
 	grfxClear()
 	grfxQuikpal(PAL_GAME)
 	mouseFreereign()

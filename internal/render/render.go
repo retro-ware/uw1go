@@ -1,13 +1,12 @@
 // Package render draws Ultima Underworld's 3D view.
 //
-// The game describes each frame as a program for the renderer: GRIDDB.C, DRAWOBJ.C and
-// GAMESORT.C write word bytecode (the "render database") that places points, draws flat,
-// Gouraud-shaded and texture-mapped polygons and scaled sprites, and calls the 3D models
-// (doors, tables, pillars ...), which UW.EXE holds as programs in the same language. This
-// package runs those programs. It reads them, the models and the renderer's tables from
-// the data segment it loads from UW.EXE (seg051, a 64 KB image that the game's writers
-// address by offset), and draws with floating point view geometry, clipping and
-// perspective-correct texture mapping into a frame buffer of its own.
+// The game draws a frame square by square, farthest first: it starts the frame (Begin), and
+// places the corners of floors, ceilings and walls (Point), which it fills flat or with a
+// texture; it stands sprites at points and calls the 3D models (doors, tables, pillars ...).
+// UW.EXE holds the models as bytecode programs; this package runs them, reading them and
+// the renderer's tables from the data segment it loads from UW.EXE (seg051), and draws
+// with floating point view geometry, clipping and perspective-correct texture mapping
+// into a frame buffer of its own.
 package render
 
 import (
@@ -17,12 +16,12 @@ import (
 
 // Offsets in the data segment.
 const (
-	DataEntry  = 0x161C // the word holding the database's entry point
 	slotTab    = 0xB07E // the bitmap slots, 8 bytes each: width, v limit, texture, row mask
 	slotCount  = 7
 	objRecord  = 0xB0D2 // do_uwobj's sprite record (+6, +8 hot spot, +0A, +0C scale)
 	critRecord = 0xB0C4 // do_uwcrit's
 	aspectWord = 0x15F4 // the screen's shape, 1.15
+	varBase    = 0x2920 // the model variables, a word each (GRIDDB.C's Clk(n))
 	varPick    = 0x2932 // model variables (GRIDDB.C's Clk slots): a pick frame
 	varPolym   = 0x2930 // textured faces drawn flat
 	varSmooth  = 0x2928 // distance shading of textured faces
@@ -34,23 +33,6 @@ type Pic struct {
 	Pix        []byte
 	W, H       int
 	HotX, HotY int // the anchor, for critters (objects use the sprite record's)
-}
-
-// Art is what the renderer gets from the game.
-type Art interface {
-	// Texture is entry i of the level's texture table: walls 0..47 at 64 pixels, floors
-	// 48..57 at 32, then the same at 16 pixels.
-	Texture(i int) []byte
-	// GrPic is graphics slot i's stored picture (header: format, width, height, size).
-	GrPic(i int) []byte
-	// ObjectPic is object type typ's sprite (from 1C0h the animations), decoded and
-	// shaded through lightabs row shade.
-	ObjectPic(typ, shade int) (Pic, bool)
-	// CritterPic is a frame of critter typ's animation (its anchor in HotX, HotY), shaded
-	// through lightabs row shade.
-	CritterPic(typ, shade, frame, variant int) (Pic, bool)
-	// MouseQ services the mouse while a frame is drawn.
-	MouseQ()
 }
 
 // Camera is where the view looks from: grid coordinates (x across, y ahead, z height,
@@ -71,7 +53,6 @@ type Renderer struct {
 	// Mem is the data segment: the database, the models, the model variables and the
 	// renderer's tables.
 	Mem []byte
-	Art Art
 
 	// The frame buffer, W by H, top row first.
 	FB   []byte
@@ -101,7 +82,6 @@ type Renderer struct {
 	colour   byte
 	fill     fillMode
 	gourBase byte
-	mapWall  bool // the g-map context: wall-style
 }
 
 type point struct {
@@ -315,16 +295,4 @@ func (r *Renderer) transform(p vec3) vec3 {
 // project is a view-space point's place on the screen, in pixels from the top left.
 func (r *Renderer) project(v vec3) (float64, float64) {
 	return r.cx + v[0]*r.projX/v[2], r.cy - v[1]*r.projY/v[2]
-}
-
-// Render draws the database whose entry point the data segment holds.
-func (r *Renderer) Render() {
-	r.setupView()
-	r.Fill(0)
-	r.m = r.base
-	r.obj = vec3{}
-	r.objShift = 0
-	r.fill = fillFlat
-	r.colour = 0
-	r.run(int(r.R16(DataEntry)))
 }

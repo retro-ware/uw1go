@@ -1,6 +1,7 @@
 package uw
 
 import (
+	mrand "math/rand/v2"
 	"os"
 	"strconv"
 )
@@ -65,14 +66,14 @@ func initLighting() {
 	}
 }
 
-// randomLight is the mushroom effect: the light maps replaced with 4 KB of low memory
-// (the interrupt vector table, in DOS; here the start of UW.EXE),
-// or put back.
+// randomLight is the mushroom effect: the light maps replaced with noise (the original
+// copied 4 KB of low memory, DOS's interrupt vector table, over them), or put back.
 func randomLight(on bool) {
 	if on {
 		initRenderer()
-		src := int(rend.Mem[0x28A0])
-		copy(lightabs[:], exeImage[src:])
+		for i := range lightabs {
+			lightabs[i] = byte(mrand.IntN(256))
+		}
 		for i := 0; i < 16; i++ {
 			lightabs[i*256] = 0
 			lightabs[i*256+1] = 0

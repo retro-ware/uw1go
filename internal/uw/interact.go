@@ -163,7 +163,7 @@ func displayScr() {
 		lastDurCheck = int32(GameTime() >> 8)
 		DurCount += int(d)
 		if realDScheck {
-			seg027_2861_EF9()
+			checkObjList()
 			realDScheck = false
 		}
 		changeMusicMaybe()
@@ -727,7 +727,7 @@ func dealWithIcons(mode int) {
 		}
 	}
 	if player.Drawn() == 0 && getCurrentMusic() == MUSIC_ARMED {
-		seg014_1DC5_15C5()
+		setRandomWalkingMusic()
 	}
 	mouseRelease(true)
 	if iconCursor(RightButtonThing) {
@@ -765,7 +765,7 @@ func puntFightmode() {
 		}
 		RightButtonThing = IMODE_DEFAULT
 		clearFightState()
-		seg014_1DC5_15C5()
+		setRandomWalkingMusic()
 	}
 }
 

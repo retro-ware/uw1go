@@ -1,9 +1,11 @@
 package uw
 
-// Port of DRAWOBJ.C: drawing one object into the 3D view's render database: a sprite
-// (do_uwobj), a critter frame (do_uwcrit), a 3D model (doRect) or a door (doDoor), as the
-// object type's render field in COMOBJ.DAT says. In a pick frame each object first gets its
-// pick colour, and colorToObj and colorToMap record it for pick_3d.
+import "github.com/memmaker/uw1go/internal/render"
+
+// Port of DRAWOBJ.C: drawing one object into the 3D view: a sprite (do_uwobj), a critter
+// frame (do_uwcrit), a 3D model (doRect) or a door (doDoor), as the object type's
+// render field in COMOBJ.DAT says. In a pick frame each object first gets its pick colour,
+// and colorToObj and colorToMap record it for pick_3d.
 
 var rect_cols = [30][4]byte{
 	{0x01, 0xEC, 0x00, 0x00},
@@ -52,20 +54,8 @@ var dirtab = [32]byte{
 
 var rect_flagcol = [2]int{0xE4, 0x66}
 
-// defres writes the object's point.
-func defres() {
-	dbw(OP_DEFRES)
-	dbw(objxloc)
-	dbw(objzloc)
-	dbw(objyloc)
-	dbw(0x7F8)
-}
-
-func movec(v, val int) {
-	dbw(OP_MOVEC)
-	dbw(v)
-	dbw(val)
-}
+// objPoint is where the object stands.
+func objPoint() render.Vertex { return rend.Point(objxloc, objyloc, objzloc) }
 
 // doObj draws one object.
 func doObj(o *Object) {
@@ -75,8 +65,7 @@ func doObj(o *Object) {
 	if PickUp != 0 {
 		colorToMap[PickUp-1] = uint16(tmptr + mptrmod)
 		colorToObj[PickUp-1] = uint16(ObjMemTPtr(o))
-		dbw(OP_SETBMCOL)
-		dbw(int(PickUp))
+		rend.SetPickColour(PickUp)
 		if PickUp++; PickUp >= PICK_WALL {
 			PickUp = 1
 		}
@@ -127,7 +116,6 @@ func doObj(o *Object) {
 		}
 		doDoor(item, o)
 	case 1:
-		defres()
 		frame := int(o.B15 & 0x3F)
 		dir := int(dirtab[int(uint16(o.HeadingBits()<<2+0x20-int((uint16(cPlayer.heading)+headmod[quad])>>11)))%0x20])
 		if frame >= 0x20 {
@@ -135,37 +123,31 @@ func doObj(o *Object) {
 		} else if frame != 0xC && (dir+5)&7 >= 3 {
 			frame = dir + 0x20
 		}
-		dbw(OP_UWCRIT)
-		dbw(item & 0x3F)
-		dbw(int(locsqmod) * lighton)
-		dbw(frame)
-		dbw(o.Frame())
-		dbw(0x7F8)
+		if pic, ok := critterPic(item&0x3F, int(locsqmod)*lighton, frame, o.Frame()); ok {
+			rend.CritterSprite(objPoint(), pic)
+		}
 	case 0:
 		if item&0x1E0 == 0xE0 && item&0x18 != 0 {
 			item = ITEM_RUNESTONE
 		}
-		defres()
-		dbw(OP_UWOBJ)
-		dbw(item)
-		dbw(int(locsqmod) * lighton)
-		dbw(0x7F8)
+		if pic, ok := objectPic(item, int(locsqmod)*lighton); ok {
+			rend.ObjectSprite(objPoint(), pic)
+		}
 	case 3:
 		if o.Minor() == 3 {
 			plain := tmapson|int(PickUp) == 0
 			if plain {
-				movec(Clk(8), 0)
+				rend.SetVar(8, 0)
 			}
 			doRect(0x14, o, -1, firstTmobj+item&0xF)
 			if !plain {
 				return
 			}
-			movec(Clk(8), 1)
+			rend.SetVar(8, 1)
 		} else {
 			tCacheOK = 0xE0
 			txtwal(nil, sqmod, 4, byte(o.Owner()))
-			dbw(OP_SET_TMCTXT)
-			dbw(cTmBm)
+			rend.SetContext(cTmBm)
 			tm := byte(w64Types[o.Owner()] & 0xFF)
 			var flat bool
 			if tm == 3 || tm == 4 {
@@ -176,26 +158,26 @@ func doObj(o *Object) {
 			}
 			flat = flat && tmapson|int(PickUp) == 0
 			if flat {
-				movec(Clk(8), 0)
+				rend.SetVar(8, 0)
 			}
 			doRect(0x16, o, -1, o.Owner())
 			if flat {
-				movec(Clk(8), 1)
+				rend.SetVar(8, 1)
 			}
 		}
 	}
 }
 
-// doRect writes a call of 3D model `model` for object o. heading -1 turns it by the
-// object's own heading; tex -1 takes the texture from rect_cols and the object's flags.
+// doRect draws 3D model `model` for object o. heading -1 turns it by the object's own
+// heading; tex -1 takes the texture from rect_cols and the object's flags.
 func doRect(model int, o *Object, heading int, tex int) {
 	hilite := -1
 	flags := int(rect_cols[model][0])
-	movec(Clk(0xA), int(locsqmod)*lighton)
+	rend.SetVar(0xA, int(locsqmod)*lighton)
 	switch {
 	case flags&0x20 != 0:
-		movec(Clk(0), int(texFirstPixel(tex+0x3A)))
-		movec(Clk(0xA), int(sqmod)*lighton)
+		rend.SetVar(0, int(texFirstPixel(tex+0x3A)))
+		rend.SetVar(0xA, int(sqmod)*lighton)
 	case flags&0x80 != 0:
 		AnimObjInPipe = 1
 		val := int(GameTime()&0x1FF) >> 6
@@ -203,11 +185,11 @@ func doRect(model int, o *Object, heading int, tex int) {
 			val = 3 - val&3
 		}
 		for i := 0; i < flags&7; i++ {
-			movec(Clk(i), o.LinkF()&0x1FF+val+int(rect_cols[model][i+1]))
+			rend.SetVar(i, o.LinkF()&0x1FF+val+int(rect_cols[model][i+1]))
 		}
 	default:
 		for i := 0; i < flags&7; i++ {
-			movec(Clk(i), int(rect_cols[model][i+1]))
+			rend.SetVar(i, int(rect_cols[model][i+1]))
 		}
 	}
 	if flags&0x10 != 0 {
@@ -218,44 +200,28 @@ func doRect(model int, o *Object, heading int, tex int) {
 				if o.Flags() >= n {
 					tex = o.Flags() - n
 					txtflr(nil, sqmod, byte(tex))
-					dbw(OP_SET_TMCTXT)
-					dbw(cTmBm)
+					rend.SetContext(cTmBm)
 					tex = -1
 				} else {
 					curautocode = 2
 					tex = first&0x1F + firstTmobj + 0x10 + o.Flags()%n
-					movec(Clk(0xB), rect_flagcol[o.Flags()&1])
-					dbw(OP_SET_TMCTXT)
-					dbw(6)
+					rend.SetVar(0xB, rect_flagcol[o.Flags()&1])
+					rend.SetContext(6)
 				}
 			} else {
 				tex = first&0x1F + firstTmobj + 0x10 + o.Flags()%n
 			}
 		}
 		if tex >= 0 {
-			dbw(OP_SETTMOBJ)
-			dbw(tex)
-			dbw(int(locsqmod) * lighton)
+			rend.SetObjectTexture(slotPic(tex))
 		}
 		tCacheOK = 0xE0
 	}
 	if flags&8 != 0 {
 		i := 0x400 - objyloc
-		dbw(OP_DEFDELTA)
-		dbw(0)
-		dbw(0)
-		dbw(i)
-		dbw(0x800)
-		movec(bmhgtoff()+0x30, i*2-1)
+		rend.SetDelta(256, i)
+		rend.SetTextureHeight(6, i*2-1)
 	}
-	org := func(x, y, z int) {
-		dbw(OP_ORG)
-		for _, v := range [3]int{x, y, z} {
-			dbw(v & 0xFFFF)
-			dbw(v >> 16)
-		}
-	}
-	org(objxloc, objyloc, objzloc)
 	var head int
 	if heading < 0 {
 		head = (o.HeadingBits() + 8 - quad*2) % 8 << 13
@@ -269,25 +235,18 @@ func doRect(model int, o *Object, heading int, tex int) {
 			j = (o.Pitch() - 0x10) * 0x266
 			head = int(int16((o.HeadingBits()<<5 + o.FineHead() + 0x100 - quad*64) % 0x100 << 8))
 		}
-		movec(Clk(5), j)
+		rend.SetVar(5, j)
 	}
 	if (model == 0x10 || model == 0x11) && tmapson|int(PickUp) == 0 {
 		hilite = 0
 	}
 	if hilite != -1 {
-		movec(Clk(8), hilite)
+		rend.SetVar(8, hilite)
 	}
-	if head != 0 {
-		dbw(OP_IHCALL)
-		dbw(head)
-	} else {
-		dbw(OP_SFCAL)
-	}
-	Ref(model+0x60, 1)
+	rend.Model(model, objxloc, objyloc, objzloc, int16(head))
 	if hilite != -1 {
-		movec(Clk(8), (hilite+1)&1)
+		rend.SetVar(8, (hilite+1)&1)
 	}
-	org(0, 0, 0)
 }
 
 // doDoor draws a door: its frame (model 1, in the tile's wall texture) and its leaf.
@@ -304,26 +263,18 @@ func doDoor(item int, o *Object) {
 		vis = 1
 		h = 0x400 - oldz - 0xD0
 		first, step = 1, -1
-		movec(Clk(5), o.Flags()&7)
-		dbw(OP_DEFDELTA)
-		dbw(0)
-		dbw(0)
-		dbw(0xD0 - (o.Flags()&7)*0x30)
-		dbw(0x400)
+		rend.SetVar(5, o.Flags()&7)
+		rend.SetDelta(128, 0xD0-(o.Flags()&7)*0x30)
 	} else {
 		if o.Flags()&7 != 0 || o.Major() == MAJOR_ANIMOBJ {
 			objyloc -= 0xC0
 		}
 		dir = (o.Flags() & 7) * (o.DoorDir()*2 - 1)
 		h = 0x400 - objyloc - 0xD0
-		movec(Clk(5), dir<<12)
+		rend.SetVar(5, dir<<12)
 	}
 	_ = dir
-	dbw(OP_DEFDELTA)
-	dbw(0)
-	dbw(0)
-	dbw(h)
-	dbw(0x800)
+	rend.SetDelta(256, h)
 	if vis == 0 {
 		v := int8((o.HeadingBits() - ThePlayer.HeadingBits() + 8) & 7)
 		if v > 4 {
@@ -351,27 +302,24 @@ func doDoor(item int, o *Object) {
 			first, step = 1, -1
 		}
 	}
-	movec(Clk(3), o.Flags()&7+b2int(z >= 0))
+	rend.SetVar(3, o.Flags()&7+b2int(z >= 0))
 	wall := tileAt(tmptr).Wall()
 	for pass := first; pass <= 1 && pass >= 0; pass += step {
 		if pass == 0 {
 			if int8(tCacheOK) < 1 {
 				txtwal(nil, locsqmod, byte(objyloc>>6), byte(wall))
 			}
-			movec(bmhgtoff()+cTmBm<<3, (cTmDm*cTmDm>>8)*h-1)
-			movec(Clk(7), cTmDm*cTmDm-1)
-			movec(Clk(6), bmhgtoff()+cTmBm<<3)
+			rend.SetTextureHeight(cTmBm, (cTmDm*cTmDm>>8)*h-1)
+			rend.SetVar(7, cTmDm*cTmDm-1)
+			rend.SetVar(6, render.TextureHeightVar(cTmBm))
 			if PickUp != 0 {
-				dbw(OP_SETBMCOL)
-				dbw(wall + PICK_WALL)
+				rend.SetPickColour(byte(wall + PICK_WALL))
 			}
-			dbw(OP_SET_TMCTXT)
-			dbw(cTmBm)
+			rend.SetContext(cTmBm)
 			doRect(1, o, o.HeadingBits()<<1, wall)
 		} else {
 			if PickUp != 0 {
-				dbw(OP_SETBMCOL)
-				dbw(int(PickUp) - 1)
+				rend.SetPickColour(PickUp - 1)
 			}
 			if z >= 0 {
 				objyloc = z
@@ -381,9 +329,8 @@ func doDoor(item int, o *Object) {
 				if int8(tCacheOK) < 1 {
 					txtwal(nil, locsqmod, byte(objyloc>>6), byte(wall))
 				}
-				dbw(OP_SET_TMCTXT)
-				dbw(cTmBm)
-				movec(bmhgtoff()+cTmBm<<3, cTmDm*cTmDm-1)
+				rend.SetContext(cTmBm)
+				rend.SetTextureHeight(cTmBm, cTmDm*cTmDm-1)
 				doRect(0xF, o, o.HeadingBits()<<1, wall)
 			} else {
 				doRect(0xE, o, o.HeadingBits()<<1, firstTmobj+k+0x30)

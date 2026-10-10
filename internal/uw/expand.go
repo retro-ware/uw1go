@@ -3,24 +3,16 @@ package uw
 // The image decoders of EXPAND.ASM (exp_8str, exp_4str, exp_4run, exp_5run) behind
 // cFrmtoRaw: a .GR/.CR bitmap in its stored form to one byte per pixel, translated through
 // its auxiliary palette and, optionally, one row of the distance-shading table lightabs.
-// As in the original the pixels go to one shared buffer (cmpbuf1), which the next decode
-// overwrites.
+// Each decode returns a new slice.
 
 // lightabs is the shading table: 16 rows of 256 colours (LIGHT.DAT).
 var lightabs [16 * 256]byte
-
-var (
-	cmpbuf    [0x10000]byte
-	unpackBuf [0x10000]byte
-	uncmpPal  [32]byte
-)
 
 // noShade is cFrmtoRaw's DH = 0FFh: no lightabs row.
 const noShade = 0xFF
 
 // cFrmtoRaw decodes bitmap bm (its header at bm[0]: format, width, height, ...) with the
-// 16- or 32-colour auxiliary palette pal and lightabs row shade (noShade for none). The
-// result is valid until the next decode.
+// 16- or 32-colour auxiliary palette pal and lightabs row shade (noShade for none).
 func cFrmtoRaw(bm []byte, pal []byte, shade int) []byte {
 	if len(bm) < 5 {
 		return nil
@@ -38,8 +30,8 @@ func cFrmtoRaw(bm []byte, pal []byte, shade int) []byte {
 	return nil
 }
 
-// setUncmpPal is seg004_63: the aux palette's rows of 16, shaded through lightabs.
-func setUncmpPal(pal []byte, rows int, shade int) {
+// auxPalette is the aux palette's rows of 16 colours, shaded through lightabs.
+func auxPalette(pal []byte, rows int, shade int) (p [32]byte) {
 	for i := 0; i < rows*16; i++ {
 		var v byte
 		if i < len(pal) {
@@ -48,55 +40,60 @@ func setUncmpPal(pal []byte, rows int, shade int) {
 		if shade != noShade {
 			v = lightabs[(shade&0xF)<<8|int(v)]
 		}
-		uncmpPal[i] = v
+		p[i] = v
 	}
+	return p
 }
 
 func exp8str(bm []byte, shade int) []byte {
 	n := int(le16(bm, 3))
 	src := bm[5:]
 	n = min(n, len(src))
+	out := make([]byte, n)
 	for i := 0; i < n; i++ {
 		v := src[i]
 		if shade != noShade {
 			v = lightabs[(shade&0xF)<<8|int(v)]
 		}
-		cmpbuf[i] = v
+		out[i] = v
 	}
-	return cmpbuf[:n]
+	return out
 }
 
 func exp4str(bm []byte, pal []byte, shade int) []byte {
-	setUncmpPal(pal, 1, shade)
+	p := auxPalette(pal, 1, shade)
 	n := int(le16(bm, 4))
 	src := bm[6:]
-	n = min(n, len(src), len(cmpbuf)/2)
+	n = min(n, len(src))
+	out := make([]byte, 2*n)
 	for i := 0; i < n; i++ {
-		cmpbuf[2*i] = uncmpPal[src[i]>>4]
-		cmpbuf[2*i+1] = uncmpPal[src[i]&0xF]
+		out[2*i] = p[src[i]>>4]
+		out[2*i+1] = p[src[i]&0xF]
 	}
-	return cmpbuf[:2*n]
+	return out
 }
 
 func exp4run(bm []byte, pal []byte, shade int) []byte {
-	setUncmpPal(pal, 1, shade)
+	p := auxPalette(pal, 1, shade)
 	n := int(le16(bm, 4))
 	src := bm[6:]
+	words := make([]byte, (n+1)/2*2)
 	for i := 0; i < (n+1)/2; i++ {
 		var b byte
 		if i < len(src) {
 			b = src[i]
 		}
-		unpackBuf[2*i] = b >> 4
-		unpackBuf[2*i+1] = b & 0xF
+		words[2*i] = b >> 4
+		words[2*i+1] = b & 0xF
 	}
-	return runDecode(unpackBuf[:n])
+	return runDecode(bm, words[:n], &p)
 }
 
 func exp5run(bm []byte, pal []byte, shade int) []byte {
-	setUncmpPal(pal, 2, shade)
+	p := auxPalette(pal, 2, shade)
 	n := int(le16(bm, 4))
 	src := bm[6:]
+	words := make([]byte, (n+7)/8*8)
 	// five bytes to eight 5-bit words, most significant bit first
 	o := 0
 	for g := 0; g < (n+7)/8; g++ {
@@ -108,20 +105,19 @@ func exp5run(bm []byte, pal []byte, shade int) []byte {
 			}
 		}
 		for k := 7; k >= 0; k-- {
-			if o < len(unpackBuf) {
-				unpackBuf[o] = byte(acc>>(5*k)) & 0x1F
-			}
+			words[o] = byte(acc>>(5*k)) & 0x1F
 			o++
 		}
 	}
-	return runDecode(unpackBuf[:min(n, len(unpackBuf))])
+	return runDecode(bm, words[:n], &p)
 }
 
-// rleDecoder is seg004_18D/seg004_194: alternate repeat and run records over words stored
+// rleDecoder alternates repeat and run records over words stored
 // one to a byte. patched stands for the self-modified ret at L01A6 used while decoding a
 // group of repeat records (count 2).
 type rleDecoder struct {
 	in      []byte
+	pal     *[32]byte
 	si      int
 	out     []byte
 	di      int
@@ -165,10 +161,10 @@ func (d *rleDecoder) records() {
 	for d.si < len(d.in) {
 		switch al := d.next(); {
 		case al > 2:
-			d.fill(al, uncmpPal[d.next()&0x1F])
+			d.fill(al, d.pal[d.next()&0x1F])
 		case al == 0:
 			n := d.count()
-			d.fill(n, uncmpPal[d.next()&0x1F])
+			d.fill(n, d.pal[d.next()&0x1F])
 		case al == 2:
 			d.patched = true
 			n := d.next()
@@ -190,7 +186,7 @@ func (d *rleDecoder) records() {
 		}
 		for ; n > 0; n-- {
 			if d.di < len(d.out) {
-				d.out[d.di] = uncmpPal[d.next()&0x1F]
+				d.out[d.di] = d.pal[d.next()&0x1F]
 			} else {
 				d.next()
 			}
@@ -199,8 +195,9 @@ func (d *rleDecoder) records() {
 	}
 }
 
-func runDecode(words []byte) []byte {
-	d := rleDecoder{in: words, out: cmpbuf[:]}
+// runDecode decodes a run-length bitmap bm's words into its width by height pixels.
+func runDecode(bm, words []byte, pal *[32]byte) []byte {
+	d := rleDecoder{in: words, pal: pal, out: make([]byte, int(bm[1])*int(bm[2]))}
 	d.records()
-	return cmpbuf[:min(d.di, len(cmpbuf))]
+	return d.out[:min(d.di, len(d.out))]
 }

@@ -8,9 +8,8 @@ import (
 
 // Port of VIEW3D.C: setting up and drawing a frame of the 3D view. setupVars turns the
 // camera into the first quadrant, do2dclip builds the vision grid and has GRIDDB.C's
-// processGrid write the frame's render database, and sendDb has the renderer (the
-// internal/render) run it into the frame buffer, which is then copied to
-// gr.FB and the screen.
+// processGrid draw the frame with the renderer (internal/render), and sendDb copies its
+// frame buffer to gr.FB and the screen.
 
 // gvec is an edge of the vision arc walking the grid. mapi is a tile index (it may leave
 // the map: tileAt guards it), loc and loc2 indices into glocs.
@@ -81,7 +80,6 @@ var (
 	mapptr   int // the eye's tile index
 	mxY      int
 	gvecs    [16]gvec // [15] stands for gvechead (only its link is used)
-	dbEntry  int
 	lastXeye int
 	lastYeye int
 )
@@ -125,13 +123,13 @@ func cPlaceFB(x, y, w, h int) {
 	rend.Resize(w, h)
 }
 
-// setCyb is the hallucination effect: it scrambles the bitmap slots' masks.
+// setCyb is the hallucination effect: it scrambles the level textures' slots' row masks.
 func setCyb(on bool) {
-	p := rmemR16(0xB002) + 2
 	if cybOn == on {
 		return
 	}
 	cybOn = on
+	initRenderer()
 	vals := [6]int{0xF0, 0xF0, 0x3E0, 0x3E0, 0xFC0, 0xFC0}
 	masks := [6]int{0xFF, 0xFF, 0x3FF, 0x3FF, 0xFFF, 0xFFF}
 	for i := 0; i < 6; i++ {
@@ -139,24 +137,17 @@ func setCyb(on bool) {
 		if on {
 			v = rand() & masks[i]
 		}
-		rmemW16(p+8*i, v)
+		rend.SetRowMask(i, v)
 	}
 }
 
-// init3d initialises the renderer and starts an empty render database.
+// init3d initialises the renderer and the vision grid's shades.
 func init3d() {
 	initRenderer()
-	grdbBlank()
-	grTostrt()
-	grEntry()
-	dbEntry = dbptr
-	dbw(0)
 	presetGrid(8)
 }
 
-func resetDb() { dbptr = dbEntry }
-
-// sendDb runs the database into the frame buffer and shows it.
+// sendDb shows the drawn frame.
 func sendDb() {
 	runRender()
 	if demoMode {
@@ -167,23 +158,15 @@ func sendDb() {
 	mous3dShow()
 }
 
-// runRender has the renderer draw the database into its frame buffer, clipped to the
-// view, and copies the result into gr.FB.
+// runRender copies the frame the renderer has drawn into gr.FB.
 func runRender() {
-	syncRender()
-	t0 := time.Now()
-	rend.Resize(xwid, xhgt)
-	rend.Render()
-	dprintf("render %v db %d bytes\n", time.Since(t0), dbptr-dbEntry)
+	dprintf("render %v\n", time.Since(frameStart))
 	copyFB()
 }
 
-// do3dGrab renders a pick frame into the frame buffer without showing it.
+// do3dGrab draws a pick frame into the frame buffer without showing it.
 func do3dGrab() {
-	resetDb()
 	do3dPickup()
-	grPutlab(0xA0)
-	dbw(0)
 	runRender()
 }
 
@@ -193,11 +176,8 @@ func renderFB() {
 		viewPasses()
 	} else {
 		setupVars()
-		resetDb()
 		do2dclip()
 	}
-	grPutlab(0xA0)
-	dbw(0)
 	runRender()
 }
 
@@ -206,19 +186,15 @@ func establishView() {
 	strtime = GameTime()
 	if steepView() {
 		viewPasses()
-		grPutlab(0xA0)
-		dbw(0)
-	} else if setupVars() {
-		resetDb()
+	} else {
+		setupVars()
 		do2dclip()
-		grPutlab(0xA0)
-		dbw(0)
 	}
 	sendDb()
 }
 
 // setupVars turns the camera into the first quadrant.
-func setupVars() bool {
+func setupVars() {
 	getEye()
 	lastXeye = int(cPlayer.x >> 8)
 	lastYeye = int(cPlayer.y >> 8)
@@ -243,7 +219,6 @@ func setupVars() bool {
 		cPlayer.y = 0xFF - t
 	}
 	cPlayer.heading = int16(uint16(cPlayer.heading) - headmod[quad])
-	return true
 }
 
 // presetGrid fills each cell's distance shade.
@@ -635,16 +610,13 @@ var cPlayer camera
 // wide-pitch's view beyond the original's pitch (UltimaHacks' setupPerspectiveAndEnqueueDraw,
 // as underworld-exhumed's VIEW3D.C has it): the original's grid reaches 45 degrees either side
 // of the heading and no further back than the eye's row, which at a steep pitch leaves the
-// bottom (or top) of the view empty. Two passes go into the one database, after one header:
-// first the squares behind the player, the grid built with the heading turned half round and
-// cut to a small diamond, without their objects, each point turned back into the forward frame
-// (SetPnt); then the view ahead, its edge rays opened to a right angle either side and the
-// squares beyond 45 degrees of the heading dropped unless within five squares.
-var (
-	drawingBehind bool // the back pass is queuing
-	twoPasses     bool // either pass is (the queue guard)
-	queueWarned   bool
-)
+// bottom (or top) of the view empty. Two passes draw into the one frame, begun from the
+// camera looking ahead: first the squares behind the player, the grid built with the heading
+// turned half round and cut to a small diamond, without their objects, each point turned
+// back into the forward frame (gridPoint); then the view ahead, its edge rays opened to a
+// right angle either side and the squares beyond 45 degrees of the heading dropped unless
+// within five squares.
+var drawingBehind bool // the back pass is drawing
 
 // steepView: the view pitches at all. Even within the original's pitch
 // its grid's 45 degrees leave the bottom corners of a view pitched down (the top of one
@@ -655,8 +627,7 @@ func steepView() bool {
 }
 
 func viewPasses() {
-	resetDb()
-	twoPasses = true
+	setupVars() // the frame's camera looks ahead
 	processGridWith(func() {
 		if PlayerPitch > 0x1000 || PlayerPitch < -0x1000 {
 			drawingBehind = true
@@ -678,7 +649,6 @@ func viewPasses() {
 		mousQUp(false)
 		subprocess()
 	})
-	twoPasses = false
 }
 
 // openRays turns initGrid's edge rays (heading -+ 0x2040) to a right angle either side: the
@@ -725,24 +695,4 @@ func cullForward() {
 			}
 		}
 	}
-}
-
-// queueFull: a square may not be queued. The database ends at seg051:AFF4 (INSTANCE.ASM's
-// _dblen); the original's one pass never comes near it, two passes queue more. The back pass
-// may use a quarter of the space, so that the view ahead always has the rest; the view ahead
-// stops 0x300 bytes short of the end, as UltimaHacks' enqueueDrawBlock does.
-func queueFull() bool {
-	const end = 0xAFF4
-	limit := end - 0x300
-	if drawingBehind {
-		limit = dbEntry + (end-dbEntry)/4
-	}
-	if !twoPasses || dbptr <= limit {
-		return false
-	}
-	if !queueWarned {
-		dprintf("wide-pitch: the render queue is full; squares left out\n")
-		queueWarned = true
-	}
-	return true
 }

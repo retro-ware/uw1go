@@ -10,7 +10,7 @@ import (
 //
 // The original keeps EMS pictures as paragraph addresses in grs_off and video memory
 // pictures as video offsets. Here a slot holds either the picture's stored bytes (grsPic,
-// for the EMS ranges) or a video memory block handle (grsOff, from first_vram on). Slot
+// for the EMS ranges) or a video memory block (grsOff, from first_vram on). Slot
 // numbers, obj_tab and the first_* bases are as in the original.
 
 var (
@@ -20,8 +20,8 @@ var (
 	firstTmobj  int
 	firstVram   int
 
-	grsPic [][]byte // per slot: the .GR bitmap (EMS pictures)
-	grsOff []int    // per slot: the video memory block (pictures from firstVram)
+	grsPic [][]byte    // per slot: the .GR bitmap (EMS pictures)
+	grsOff []*gr.Block // per slot: the video memory block (pictures from firstVram)
 	objTab [1024]uint16
 
 	grIndex    int
@@ -41,15 +41,15 @@ type grFile struct {
 	count int
 }
 
-func setSlot(i int, pic []byte, vram int) {
+func setSlot(i int, pic []byte, vram *gr.Block) {
 	for len(grsPic) <= i {
 		grsPic = append(grsPic, nil)
-		grsOff = append(grsOff, 0)
+		grsOff = append(grsOff, nil)
 	}
 	if pic != nil {
 		grsPic[i] = pic
 	}
-	if vram != 0 {
+	if vram != nil {
 		grsOff[i] = vram
 	}
 }
@@ -61,9 +61,9 @@ func slotPic(i int) []byte {
 	return grsPic[i]
 }
 
-func slotVram(i int) int {
+func slotVram(i int) *gr.Block {
 	if i < 0 || i >= len(grsOff) {
-		return 0
+		return nil
 	}
 	return grsOff[i]
 }
@@ -175,7 +175,7 @@ func gronkGr(art string, start, count int, move func(img []byte, size, index int
 var lastGrCount int
 
 func movenewEms(img []byte, size, index int) bool {
-	setSlot(index+grIndex, img, 0)
+	setSlot(index+grIndex, img, nil)
 	return true
 }
 
@@ -185,7 +185,7 @@ func moveObjEms(base int) func([]byte, int, int) bool {
 			objTab[(base+index)*2] = 0
 		} else {
 			objTab[(base+index)*2] = uint16(grIndex)
-			setSlot(grIndex, img, 0)
+			setSlot(grIndex, img, nil)
 			grIndex++
 		}
 		return true
@@ -198,10 +198,7 @@ func movenewVram(img []byte, size, index int) bool {
 		return false
 	}
 	w, h := int(img[1]), int(img[2])
-	hd := gr.Valloc(w, h)
-	if hd == 0 {
-		return false
-	}
+	hd := gr.NewBlock(w, h)
 	copyToVram(img, hd)
 	setSlot(index+grIndex, nil, hd)
 	return true
@@ -212,8 +209,7 @@ func moveVram(img []byte, size, index int) bool {
 	return true
 }
 
-func copyToVram(img []byte, hd int) {
-	b := gr.VBlock(hd)
+func copyToVram(img []byte, b *gr.Block) {
 	if b == nil || len(img) < 5 {
 		return
 	}
@@ -344,7 +340,7 @@ func loadDoors() {
 	for i := 0; i < 6; i, grIndex = i+1, grIndex+1 {
 		slot := grIndex
 		gronkGr("doors", int(ActDoors[i]), 1, func(img []byte, size, index int) bool {
-			setSlot(slot, img, 0)
+			setSlot(slot, img, nil)
 			return true
 		})
 	}

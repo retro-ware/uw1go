@@ -25,7 +25,7 @@ type sprite struct {
 	yoff  byte
 	layer int
 	pic   int
-	block int
+	block *gr.Block
 }
 
 var (
@@ -50,11 +50,9 @@ func createSprite(layer int, wh ...int) int {
 			s.flags |= spTrans
 		}
 		s.layer = layer
-		s.block = 0
+		s.block = nil
 		if layer != 0 {
-			if s.block = gr.Valloc(wh[0], wh[1]); s.block == 0 {
-				return -1
-			}
+			s.block = gr.NewBlock(wh[0], wh[1])
 		}
 		s.yoff = 0
 		return i
@@ -180,13 +178,11 @@ func updateSprites() {
 			if s.flags&spNoSave != 0 {
 				s.flags &^= spNoSave
 			} else {
-				gr.RestoreRect(s.block)
+				s.block.Restore()
 			}
 			if s.flags&spDestroyed != 0 {
 				s.flags &^= spInUse
-				if s.block != 0 {
-					gr.Vfree(s.block)
-				}
+				s.block = nil
 			}
 		}
 	}
@@ -197,7 +193,7 @@ func updateSprites() {
 				if s.flags&spVisible == 0 {
 					s.flags |= spNoSave
 				} else {
-					gr.SaveRect(s.block, s.x, int(s.y), s.w, int(s.h))
+					s.block.Save(s.x, int(s.y), s.w, int(s.h))
 				}
 			}
 		}

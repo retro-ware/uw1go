@@ -17,7 +17,7 @@ var (
 	skillTop byte
 	ordinals = [4]string{"ST", "ND", "RD", "TH"}
 	// spsave holds the saved backgrounds of the skill list and the hit point and mana figures.
-	spsave [3]int
+	spsave [3]*gr.Block
 )
 
 func statRightAligned(s string, y int) { gr.StringToScreen(s, statRight-gr.StringWidth(s), y) }
@@ -59,20 +59,18 @@ func spXp() {
 // spSkill draws row i of the skill list: skill i + skillTop.
 func spSkill(i int) {
 	s := i + int(skillTop)
-	gr.ShowBlock(spsave[0], 0xF0, 0x80-i*7+1, 0x4C, (i+1)*7, 0, i*7)
+	spsave[0].Show(0xF0, 0x80-i*7+1, 0x4C, (i+1)*7, 0, i*7)
 	gr.StringToScreen(strings.ToUpper(getString((s+0x1F)|STR_CHARGEN)), 0xF2, 0x80-i*7)
 	statRightAligned(strconv.Itoa(int(player.Skills[s])), 0x80-i*7)
 }
 
 // RedispStat draws the statistics page, saving the backgrounds it redraws the first time.
 func RedispStat() {
-	if spsave[0] == 0 {
-		if spsave[0] = gr.Valloc(0x4B, 0x2A); spsave[0] != 0 {
-			gr.SaveRect(spsave[0], 0xF0, 0x81, 0x4B, 0x2B)
-		}
-		if spsave[1] = gr.Valloc(0x23, 0x15); spsave[1] != 0 {
-			gr.SaveRect(spsave[1], 0x115, 0x96, 0x23, 0x15)
-		}
+	if spsave[0] == nil {
+		spsave[0] = gr.NewBlock(0x4B, 0x2A)
+		spsave[0].Save(0xF0, 0x81, 0x4B, 0x2B)
+		spsave[1] = gr.NewBlock(0x23, 0x15)
+		spsave[1].Save(0x115, 0x96, 0x23, 0x15)
 	}
 	gr.ForegroundColor, gr.BackgroundColor = 0xF1, 0xF1
 	mouseHide()

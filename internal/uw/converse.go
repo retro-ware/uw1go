@@ -163,7 +163,7 @@ func freeConverse() {
 		convoWorkspace = false
 		endBarter()
 	}
-	seg014_1DC5_15C5()
+	setRandomWalkingMusic()
 	RightPanel = rightPanelSaved
 	doMainScroll()
 }

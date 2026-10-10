@@ -1,17 +1,16 @@
 package uw
 
-// Port of GRIDDB.C: building the 3D view's render database from the map grid.
-// subprocess walks the visible cells of the vision grid from the farthest row to the eye
-// and grdbElem writes each tile's floor, ceiling, walls and diagonal face as model
-// interpreter bytecode (the OP_* opcodes), then hands its objects to GAMESORT.C.
+import "github.com/memmaker/uw1go/internal/render"
 
-type flrFn func(pts []byte, shade, tex byte)
-type walFn func(pts []byte, shade, height, tex byte)
+// Port of GRIDDB.C: drawing the 3D view from the map grid. subprocess walks the visible
+// cells of the vision grid from the farthest row to the eye and grdbElem draws each tile's
+// floor, ceiling, walls and diagonal face, then hands its objects to GAMESORT.C.
+
+type flrFn func(pts *[4]render.Vertex, shade, tex byte)
+type walFn func(pts *[4]render.Vertex, shade, height, tex byte)
 
 var (
-	cWCol         int
 	loopx, loopy  int
-	cTmSz         int
 	pGloc         int
 	qdec          *[4]byte
 	AnimObjInPipe byte
@@ -19,22 +18,19 @@ var (
 	colorToObj    [192]uint16
 	PickUp        byte
 	sqmod         byte
-	flatCase      bool
 	tmptr         int // the tile index of the cell being emitted
 	pipeexp       int
 	cTmBm, cTmDm  int
 	grFcall       flrFn
 	grCcall       flrFn
 	grWcall       walFn
-	cTmHg         int
 	tCacheOK      byte
 
-	dist8         = 4
-	distpoly      = 7
-	tmapson       = 1
-	lighton       = 1
-	curautocode   byte
-	SpecShadeMode int8 = 1
+	dist8       = 4
+	distpoly    = 7
+	tmapson     = 1
+	lighton     = 1
+	curautocode byte
 
 	gftab = [2]flrFn{polyflr, txtflr}
 	gctab = [2]flrFn{polycie, polyflr}
@@ -68,47 +64,22 @@ func setGraphicsLevel() {
 	lighton = 1
 }
 
-// frameHeader writes the database's view header and model variables.
-func frameHeader(v9, v8, v4 int) {
-	dbw(OP_OBJ)
-	Ref(0xA0, 1)
-	for _, w := range [...]int{0, 0x2200, 0, 0, 0x400, 0, 0, 0x1100, 0, 0, 0x3300} {
-		dbw(w)
-	}
-	dbw(OP_MOVEC)
-	dbw(Clk(9))
-	dbw(v9)
-	dbw(OP_MOVEC)
-	dbw(Clk(8))
-	dbw(v8)
-	dbw(OP_MOVEC)
-	dbw(Clk(4))
-	dbw(v4)
-	dbw(OP_SET_GMAP_CTXT)
-	dbw(b2int(flatCase))
-}
-
-// processGrid writes the database for a normal frame.
+// processGrid draws a normal frame.
 func processGrid() { processGridWith(subprocess) }
 
-// processGridWith writes the header and has walk write the squares (wide-pitch's two passes,
-// viewPasses, walk the grid twice).
+// processGridWith begins a frame from the current camera and has walk draw the squares
+// (wide-pitch's two passes, viewPasses, walk the grid twice).
 func processGridWith(walk func()) {
 	oldlight := lighton
 	AnimObjInPipe = 0
-	flatCase = cPlayer.pitch == 0 && cPlayer.bank == 0
 	PickUp = 0
 	grFcall = gftab[tmapson]
 	grCcall = gctab[tmapson]
 	grWcall = gwtab[tmapson]
-	v4 := int(SpecShadeMode)
 	if PlayerLevel == 9 {
-		v4 = 0
 		lighton = 0
 	}
-	frameHeader(0, 1-tmapson, v4)
-	initRenderer()
-	rend.SetPickMode(false)
+	beginFrame(false, tmapson == 0, PlayerLevel != 9)
 	pipeexp = 0
 	walk()
 	if player.Level != 0 && player.Level < 0x10 && PlayerLevel != 9 {
@@ -121,16 +92,13 @@ func processGridWith(walk func()) {
 	}
 }
 
-// do3dPickup writes the database for a pick frame.
+// do3dPickup draws a pick frame.
 func do3dPickup() {
 	PickUp = 1
-	flatCase = cPlayer.pitch == 0 && cPlayer.bank == 0
-	frameHeader(1, 1, 0)
+	beginFrame(true, true, false)
 	grFcall = gftab[0]
 	grCcall = gctab[0]
 	grWcall = gwtab[0]
-	initRenderer()
-	rend.SetPickMode(true)
 	sdXmod = quad_mod[quad][0]
 	sdYmod = quad_mod[quad][1]
 	subprocess()
@@ -174,7 +142,7 @@ func subprocess() {
 		if i&^0xFFF == 0 {
 			grdbElem(playersMapAt(i))
 		}
-		dbw(OP_MOUSEQ)
+		mousQUp(true)
 		gl -= 33
 		row -= dy
 		idx -= dy
@@ -192,23 +160,14 @@ func subprocess() {
 	}
 }
 
-// flatFace writes a 4-point flat polygon in colour c.
-func flatFace(c int, pts []byte) {
-	cWCol = c
-	dbw(OP_SETCOLOR)
-	dbw(cWCol)
-	dbw(OP_POLYRES)
-	dbw(4)
-	for k := 0; k < 4; k++ {
-		dbw(int(pts[k]) << 3)
-	}
-}
+// flatFace fills a quad with colour c.
+func flatFace(c int, pts *[4]render.Vertex) { rend.Polygon(byte(c), pts[:]...) }
 
 func shadedTexColor(tex int, shade byte) int {
 	return int(lightabs[(int(shade)*lighton<<8+int(texFirstPixel(tex)))&0xFFF])
 }
 
-func polyflr(pts []byte, shade, tex byte) {
+func polyflr(pts *[4]render.Vertex, shade, tex byte) {
 	if PickUp != 0 {
 		flatFace(int(tex)+PICK_FLOOR, pts)
 	} else {
@@ -216,7 +175,7 @@ func polyflr(pts []byte, shade, tex byte) {
 	}
 }
 
-func polycie(pts []byte, shade, tex byte) {
+func polycie(pts *[4]render.Vertex, shade, tex byte) {
 	if PickUp != 0 {
 		flatFace(PICK_CEILING, pts)
 	} else {
@@ -224,7 +183,7 @@ func polycie(pts []byte, shade, tex byte) {
 	}
 }
 
-func polywal(pts []byte, shade, height, tex byte) {
+func polywal(pts *[4]render.Vertex, shade, height, tex byte) {
 	if PickUp != 0 {
 		flatFace(int(tex)+PICK_WALL, pts)
 	} else {
@@ -232,105 +191,83 @@ func polywal(pts []byte, shade, height, tex byte) {
 	}
 }
 
-func bmhgtoff() int { return rmemR16(0xB000) }
-
-// txtflr writes a texture-mapped floor or ceiling (with pts nil, only the texture set-up).
-func txtflr(pts []byte, shade, tex byte) {
+// txtflr draws a texture-mapped floor or ceiling (with pts nil, only puts its texture in
+// slot cTmBm).
+func txtflr(pts *[4]render.Vertex, shade, tex byte) {
 	if int(shade) >= distpoly && pts != nil {
 		polyflr(pts, shade, tex)
 		return
 	}
 	t := int(tex)
+	vlimit := 0x3FF
 	if int(shade) >= dist8 {
 		t += 0x6A
 		cTmBm = lighton
-		cTmSz = 0x100
-		cTmHg = 0xFF
+		vlimit = 0xFF
 		cTmDm = 0x10
 	} else {
 		cTmBm = 2
 		if shade != 0 {
 			cTmBm += lighton
 		}
-		cTmSz = 0x400
 		cTmDm = 0x20
-		cTmHg = 0x3FF
 		t += 0x30
 	}
-	dbw(OP_FETCHMAP)
-	dbw(cTmBm)
-	dbw(int(uint8(t)))
-	dbw(cTmSz)
-	dbw(OP_MOVEC)
-	dbw(bmhgtoff() + cTmBm<<3)
-	dbw(cTmHg)
+	rend.SetTexture(cTmBm, levelTex(t&0xFF))
+	rend.SetTextureHeight(cTmBm, vlimit)
 	if pts != nil {
-		dbw(OP_TMAP)
-		dbw(cTmBm)
-		dbw(int(pts[0]) << 3)
-		dbw(int(qdec[3]))
-		dbw(int(pts[1]) << 3)
-		dbw(int(qdec[2]))
-		dbw(int(pts[2]) << 3)
-		dbw(int(qdec[1]))
-		dbw(int(pts[3]) << 3)
-		dbw(int(qdec[0]))
+		rend.TexQuad(cTmBm, *pts, [4]int{int(qdec[3]), int(qdec[2]), int(qdec[1]), int(qdec[0])})
 	}
 }
 
-// txtwal writes a texture-mapped wall height tiles high.
-func txtwal(pts []byte, shade, height, tex byte) {
+// txtwal draws a texture-mapped wall height tiles high (with pts nil, only puts its
+// texture in slot cTmBm). tCacheOK counts the walls a tile has drawn: from the second on
+// the slot already holds the texture.
+func txtwal(pts *[4]render.Vertex, shade, height, tex byte) {
 	if int(shade) >= distpoly && pts != nil {
 		polywal(pts, shade, height, tex)
 		return
 	}
 	t := int(tex)
+	var vlimit int
 	if int(shade) >= dist8 {
 		cTmBm = 0
 		if shade != 0 {
 			cTmBm += lighton
 		}
-		cTmSz = 0x100
 		cTmDm = 0x10
-		cTmHg = int(height)<<2<<4 - 1
+		vlimit = int(height)<<2<<4 - 1
 		t += 0x3A
 	} else {
 		cTmBm = 4
 		if shade != 0 {
 			cTmBm += lighton
 		}
-		cTmSz = 0x1000
 		cTmDm = 0x40
-		cTmHg = int(height)<<4<<6 - 1
+		vlimit = int(height)<<4<<6 - 1
 	}
 	c := tCacheOK
 	tCacheOK++
 	if int8(c) < 1 {
-		dbw(OP_FETCHMAP)
-		dbw(cTmBm)
-		dbw(int(uint8(t)))
-		dbw(cTmSz)
+		rend.SetTexture(cTmBm, levelTex(t&0xFF))
 	}
-	dbw(OP_MOVEC)
-	dbw(bmhgtoff() + cTmBm<<3)
-	dbw(cTmHg)
+	rend.SetTextureHeight(cTmBm, vlimit)
 	if pts != nil {
-		if flatCase {
-			dbw(OP_COMPACT_WTMAP)
-		} else {
-			dbw(OP_COMPACT_TMAP)
-		}
-		dbw(cTmBm)
-		dbw(int(pts[1])<<8 + int(pts[0]))
-		dbw(int(pts[3])<<8 + int(pts[2]))
+		rend.WallQuad(cTmBm, *pts)
 	}
 }
 
-// grdbElem writes one tile, the one at tmptr in grid cell pGloc.
-func grdbElem(automap *byte) {
-	if queueFull() { // wide-pitch: the two passes keep the queue back from its end
-		return
+// gridPoint places a corner of the grid: x, y a grid cell (the eye's column 16, its row
+// 0), z a tile height (16 the ceiling).
+func gridPoint(x, y, z int) render.Vertex {
+	if drawingBehind { // wide-pitch's back pass: turned back into the forward frame
+		x, y = 33-x, 1-y
 	}
+	return rend.Point((x-0x10)<<8, z<<6, y<<8)
+}
+
+// grdbElem draws one tile, the one at tmptr in grid cell pGloc.
+func grdbElem(automap *byte) {
 	t := tileAt(tmptr)
 	flags := int(glocs[pGloc].flags)
 	if flags&GLOC_SEEN == 0 {
@@ -341,7 +278,6 @@ func grdbElem(automap *byte) {
 		clearObjsort()
 		return
 	}
-	ptnuminq = 0xC8
 	ht := byte(t.Height())
 	sqmod = glocs[pGloc].shade & 0xF
 	var code byte
@@ -364,22 +300,22 @@ func grdbElem(automap *byte) {
 			(hgtVal[int(ht)+int(hm[0])]-cPlayer.z)*int16(norm[hq][1])
 		vis = s < 0
 	}
-	var pts [4]byte
-	pt := func(x, y, z int) byte { return byte(SetPnt(x, y, z)) }
+	var pts [4]render.Vertex
+	pt := gridPoint
 	tCacheOK = 0xE0
 	if vis {
 		pts[0] = pt(loopx, loopy+1, int(ht+hm[2]))
 		pts[1] = pt(loopx+1, loopy+1, int(ht+hm[3]))
 		pts[2] = pt(loopx+1, loopy, int(ht+hm[1]))
 		pts[3] = pt(loopx, loopy, int(ht+hm[0]))
-		grFcall(pts[:], sqmod, byte(t.Floor()))
+		grFcall(&pts, sqmod, byte(t.Floor()))
 	}
 	if cPlayer.z <= 0x3F4 {
 		pts[0] = pt(loopx, loopy, 0x10)
 		pts[1] = pt(loopx+1, loopy, 0x10)
 		pts[2] = pt(loopx+1, loopy+1, 0x10)
 		pts[3] = pt(loopx, loopy+1, 0x10)
-		grCcall(pts[:], sqmod, 9)
+		grCcall(&pts, sqmod, 9)
 	}
 	bit := GLOC_STEP_RIGHT
 	tCacheOK = 0
@@ -410,7 +346,7 @@ func grdbElem(automap *byte) {
 		pts[1] = pt(loopx+int(wm[3]), loopy+int(wm[4]), int(h2))
 		pts[2] = pt(loopx+int(wm[3]), loopy+int(wm[4]), int(ht+hm[wm[5]]))
 		pts[3] = pt(loopx+int(wm[0]), loopy+int(wm[1]), int(ht+hm[wm[2]]))
-		grWcall(pts[:], sqmod, sh, byte(t.Wall()))
+		grWcall(&pts, sqmod, sh, byte(t.Wall()))
 	}
 	if flags&(GLOC_DIAG|GLOC_SHAPED) == GLOC_DIAG|GLOC_SHAPED {
 		d := &dxtab[flags&3]
@@ -421,7 +357,7 @@ func grdbElem(automap *byte) {
 			pts[1] = pt(loopx+int(d[2]), loopy+int(d[3]), 0x10)
 			pts[2] = pt(loopx+int(d[2]), loopy+int(d[3]), int(ht))
 			pts[3] = pt(loopx+int(d[0]), loopy+int(d[1]), int(ht))
-			grWcall(pts[:], sqmod, 0x10-ht, byte(t.Wall()))
+			grWcall(&pts, sqmod, 0x10-ht, byte(t.Wall()))
 		}
 	}
 	if drawingBehind { // no objects behind the player, and the automap left alone

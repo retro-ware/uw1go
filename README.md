@@ -9,10 +9,11 @@ works).
 The port follows the decompiled source of
 [underworld-exhumed](https://github.com/memmaker/underworld-exhumed)
 function by function: one Go file per C file in `internal/uw`. The 3D renderer
-(`internal/render`) is rewritten natively: it runs the render database and the
-3D models from UW.EXE as the original's interpreter does, and draws with floating
-point geometry and clipping. It is not a
-faithful replica, though: it always plays as a modernized game, with the changes below.
+(`internal/render`) is rewritten natively: the game draws each square's faces,
+sprites and models through it directly, it runs the 3D models from UW.EXE as the
+original's interpreter does, and it draws with floating point geometry and clipping.
+It is not a faithful replica, though: it always plays as a modernized game, with the
+changes below.
 
 ## What is modern
 

@@ -35,10 +35,10 @@ var (
 	lastOffer      int
 	npcJudgement   [NUM_TRADE_SLOTS]int
 	npcAppraisals  [NUM_TRADE_SLOTS]int
-	npcUndersave   [NUM_TRADE_SLOTS]int
+	npcUndersave   [NUM_TRADE_SLOTS]*gr.Block
 	playJudgement  [NUM_TRADE_SLOTS]int
 	playAppraisals [NUM_TRADE_SLOTS]int
-	playUndersave  [NUM_TRADE_SLOTS]int
+	playUndersave  [NUM_TRADE_SLOTS]*gr.Block
 )
 
 func wallTime() uint { return uint(time.Now().Unix()) }
@@ -91,12 +91,12 @@ func barterInit() {
 	crit := &Creatures[talkingTo.InMajor()]
 	gr.Transparency = true
 	for s := 0; s < NUM_TRADE_SLOTS; s++ {
-		playUndersave[s] = gr.Valloc(16, 16)
-		npcUndersave[s] = gr.Valloc(16, 16)
+		playUndersave[s] = gr.NewBlock(16, 16)
+		npcUndersave[s] = gr.NewBlock(16, 16)
 	}
 	for s := 0; s < NUM_TRADE_SLOTS; s++ {
-		gr.SaveRect(playUndersave[s], playSlotXY[s].x, playSlotXY[s].y, 16, 16)
-		gr.SaveRect(npcUndersave[s], npcSlotXY[s].x, npcSlotXY[s].y, 16, 16)
+		playUndersave[s].Save(playSlotXY[s].x, playSlotXY[s].y, 16, 16)
+		npcUndersave[s].Save(npcSlotXY[s].x, npcSlotXY[s].y, 16, 16)
 	}
 	for s := 0; s < NUM_TRADE_SLOTS; s++ {
 		barterPlyIDs[s], barterNpcIDs[s] = 0, 0
@@ -130,18 +130,17 @@ func endBarter() {
 	for s := 0; s < NUM_TRADE_SLOTS; s++ {
 		if barterPlyIDs[s] > 0 {
 			nearMobPutAt(ThePlayer, ObjIntTMem(barterPlyIDs[s]), 5, false)
-			gr.RestoreRect(playUndersave[s])
+			playUndersave[s].Restore()
 		}
 		if barterNpcIDs[s] > 0 {
 			nearMobPutAt(talkingTo, ObjIntTMem(barterNpcIDs[s]), 5, false)
-			gr.RestoreRect(npcUndersave[s])
+			npcUndersave[s].Restore()
 		}
 	}
 	mouseShow()
 	for s := 0; s < NUM_TRADE_SLOTS; s++ {
-		gr.Vfree(playUndersave[s])
-		gr.Vfree(npcUndersave[s])
-		playUndersave[s], npcUndersave[s] = 0, 0
+		playUndersave[s] = nil
+		npcUndersave[s] = nil
 	}
 }
 
@@ -286,7 +285,7 @@ func drawTradeSlot(side, slot int) {
 		ids, xy, under = &barterPlyIDs, &playSlotXY, &playUndersave
 	}
 	index := ids[slot]
-	gr.RestoreRect(under[slot])
+	under[slot].Restore()
 	if index != 0 {
 		obj := ObjIntTMem(index)
 		picToScreen(obj.Item(), xy[slot].x, xy[slot].y)
@@ -387,7 +386,7 @@ func returnTradeObjectsToNPC(onlyUnselected bool) {
 	for s := 0; s < NUM_TRADE_SLOTS; s++ {
 		if barterNpcIDs[s] > 0 && (!onlyUnselected || npcSelect[s] == 0) {
 			ObjAdd(&talkingTo.OL, ObjIntTMem(barterNpcIDs[s]))
-			gr.RestoreRect(npcUndersave[s])
+			npcUndersave[s].Restore()
 			npcSelect[s] = 0
 			barterNpcIDs[s] = 0
 			showSelection(0, s)
@@ -402,7 +401,7 @@ func tradeObjects() {
 	for s := 0; s < NUM_TRADE_SLOTS; s++ {
 		if barterPlyIDs[s] > 0 && playSelect[s] != 0 && doesNpcLike(barterPlyIDs[s]) != -1 {
 			npcInvAddCoins(ObjIntTMem(barterPlyIDs[s]))
-			gr.RestoreRect(playUndersave[s])
+			playUndersave[s].Restore()
 			playSelect[s] = 0
 			barterPlyIDs[s] = 0
 			showSelection(1, s)
@@ -622,7 +621,7 @@ func playerBarterGive(index int) {
 	mouseHide()
 	for s := 0; s < NUM_TRADE_SLOTS; s++ {
 		if barterPlyIDs[s] == index {
-			gr.RestoreRect(playUndersave[s])
+			playUndersave[s].Restore()
 			barterPlyIDs[s] = 0
 			playSelect[s] = 0
 			showSelection(1, s)

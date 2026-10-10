@@ -24,12 +24,12 @@ func bmSize(bm []byte) (int, int) {
 	return int(bm[1]), int(bm[2])
 }
 
-// seg009_6D draws slot icon at x, y on the screen.
-func seg009_6D(icon, x, y int) {
+// showSlotIcon draws slot icon at x, y on the screen.
+func showSlotIcon(icon, x, y int) {
 	if icon >= firstVram {
 		hd := slotVram(icon)
-		w, h := gr.BlockSize(hd)
-		gr.ShowBlock(hd, x, y, w, h, 0, 0)
+		w, h := hd.Size()
+		hd.Show(x, y, w, h, 0, 0)
 		return
 	}
 	bm := slotPic(icon)
@@ -69,7 +69,7 @@ func picToScreen(icon, x, y int) {
 	if special {
 		gr.Transparency = true
 	}
-	seg009_6D(grsWhich1(icon), x, y)
+	showSlotIcon(grsWhich1(icon), x, y)
 	if special {
 		gr.Transparency = false
 	}
@@ -79,7 +79,7 @@ func picToScreen(icon, x, y int) {
 func picSize(icon int) (int, int) {
 	s := grsWhich1(icon)
 	if s >= firstVram {
-		return gr.BlockSize(slotVram(s))
+		return slotVram(s).Size()
 	}
 	return bmSize(slotPic(s))
 }
@@ -92,5 +92,5 @@ func picToFbuf(icon, x, y int) {
 // the swapped parameter names).
 func maskToScreen(icon, x, y, width, height, clip int) {
 	s := grsWhich1(icon)
-	gr.ShowBlock(slotVram(s), x, y, height, width+clip, 0, clip)
+	slotVram(s).Show(x, y, height, width+clip, 0, clip)
 }

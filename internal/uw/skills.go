@@ -185,18 +185,18 @@ func mantraAdvance() {
 				if player.Cup() == 0 {
 					printPathTo(getString(0x223), ThePlayer.HomeX(), ThePlayer.HomeY(), PlayerLevel, 0x18, 0x2D, 3, 4)
 				}
-				seg041_35D7_E9(0x20)
+				waitTicks(0x20)
 				return
 			case 1:
 				if player.Key() == 0 && placeNew(nil, ITEM_KEY_OF_TRUTH) != nil {
 					gameSprint(0x1E)
 					player.SetKey(1)
 				}
-				seg041_35D7_E9(0x20)
+				waitTicks(0x20)
 				return
 			case 2:
 				gameSprint(0x1F)
-				seg041_35D7_E9(0x20)
+				waitTicks(0x20)
 				return
 			case 3:
 				base, size, tries = SKILL_ATTACK, 7, 3
@@ -205,7 +205,7 @@ func mantraAdvance() {
 			case 5:
 				base, size, tries = SKILL_TRAPS, 10, 4
 			default:
-				seg041_35D7_E9(0x20)
+				waitTicks(0x20)
 				return
 			}
 			if player.SkillPoints == 0 {
@@ -240,7 +240,7 @@ func mantraAdvance() {
 		panelCheck()
 	}
 	FixPlayerEquips()
-	seg041_35D7_E9(0x20)
+	waitTicks(0x20)
 	mouseClearQ()
 	flushKeys()
 }
@@ -384,7 +384,7 @@ func playerSleep(how int) {
 		dropDrunkPlayer()
 	}
 	if ThePlayer.HP == 0 {
-		seg014_1DC5_15C5()
+		setRandomWalkingMusic()
 		return
 	}
 	if wanderingMonsterCheck() {
@@ -441,7 +441,7 @@ func playerSleep(how int) {
 	PN.Vel = [3]int16{}
 	panelCheck()
 	renderFB()
-	seg014_1DC5_15C5()
+	setRandomWalkingMusic()
 	if fade {
 		fadein3d(5)
 	} else {
@@ -601,7 +601,7 @@ func playerIsDead() {
 		ThePlayer.HP = 4
 		return
 	}
-	seg014_1DC5_C7C()
+	killAllEffects()
 	loadNewMusic(MUSIC_DEATH, true)
 	playerGetExp(-int(player.Exp >> 3))
 	renderFB()
@@ -767,8 +767,8 @@ func panelCheckHpmp() {
 		gr.BackgroundColor = 0xF1
 		mouseHide()
 		grfxLoadFont("font5x6i.sys")
-		if spsave[1] != 0 {
-			gr.RestoreRect(spsave[1])
+		if spsave[1] != nil {
+			spsave[1].Restore()
 		}
 		spHp()
 		spMp()

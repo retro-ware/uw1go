@@ -22,7 +22,7 @@ const PIC_BODY = ICON_INV
 var (
 	invArmorObj  [6]int
 	invArmorQ    [6]int
-	SaveHandles  [NUM_DISPLAY]int
+	SaveHandles  [NUM_DISPLAY]*gr.Block
 	panelMouse   int
 	CursorObjPtr *Object
 
@@ -74,10 +74,6 @@ var (
 
 func DisplayToSlot() []byte { return SlotToDisplay[NUM_INV_SLOTS:] }
 
-func valloc(w, h int) int         { return gr.Valloc(w, h) }
-func saveRect(hd, x, y, w, h int) { gr.SaveRect(hd, x, y, w, h) }
-func restoreRect(hd int)          { gr.RestoreRect(hd) }
-
 // loadInventoryPix loads the paperdoll body picture and forgets the armour pictures.
 func loadInventoryPix() {
 	reloadGrVpic(PIC_BODY, "bodies", player.Female()*10/2+player.Body())
@@ -96,10 +92,10 @@ func BeginInventory() {
 	gr.Transparency = true
 	loadInventoryPix()
 	for i := 6; i < NUM_DISPLAY; i++ {
-		SaveHandles[i] = gr.Valloc(int(InvDisplay[i].w), int(InvDisplay[i].h))
+		SaveHandles[i] = gr.NewBlock(int(InvDisplay[i].w), int(InvDisplay[i].h))
 	}
-	SaveHandles[0] = gr.Valloc(0x10, 0x0A)
-	SaveHandles[1] = gr.Valloc(0x54, 0x29)
+	SaveHandles[0] = gr.NewBlock(0x10, 0x0A)
+	SaveHandles[1] = gr.NewBlock(0x54, 0x29)
 	for i := 6; i < NUM_DISPLAY; i++ {
 		x, w := InvDisplay[i].x, int(InvDisplay[i].w)
 		if i == 10 {
@@ -107,10 +103,10 @@ func BeginInventory() {
 		} else if i == 11 {
 			w -= 5
 		}
-		saveRect(SaveHandles[i], x, InvDisplay[i].y, w, int(InvDisplay[i].h))
+		SaveHandles[i].Save(x, InvDisplay[i].y, w, int(InvDisplay[i].h))
 	}
-	saveRect(SaveHandles[1], 0xEC, 0x77, 0x54, 0x29)
-	saveRect(SaveHandles[0], 0x12B, 0x8D, 0x10, 0x0A)
+	SaveHandles[1].Save(0xEC, 0x77, 0x54, 0x29)
+	SaveHandles[0].Save(0x12B, 0x8D, 0x10, 0x0A)
 	panelMouse = defineMouseRegion(0xF0, 0x52, 0x13B, 0xBD, ICON_CURSORS)
 	panelInput = inputAddmouse(0xF0, 0x52, 0x13B, 0xBD, nil, 5, func(a any) { mousInPanel(a) })
 }
@@ -295,8 +291,8 @@ func DisplayInvSpecial() {
 		}
 	}
 	gr.Transparency = false
-	saveRect(SaveHandles[11], InvDisplay[11].x, InvDisplay[11].y, int(InvDisplay[11].w)-5, int(InvDisplay[11].h))
-	saveRect(SaveHandles[10], InvDisplay[10].x+5, InvDisplay[10].y, int(InvDisplay[10].w)-5, int(InvDisplay[10].h))
+	SaveHandles[11].Save(InvDisplay[11].x, InvDisplay[11].y, int(InvDisplay[11].w)-5, int(InvDisplay[11].h))
+	SaveHandles[10].Save(InvDisplay[10].x+5, InvDisplay[10].y, int(InvDisplay[10].w)-5, int(InvDisplay[10].h))
 	if Inventory[INV_RING].Index() != 0 || Inventory[INV_RING+1].Index() != 0 {
 		displayInventoryArray(10, 11)
 	}
@@ -321,7 +317,7 @@ func DisplayInvObject(slot int) {
 	} else if slot < DISP_UP {
 		displayInventoryArray(slot, slot)
 	} else {
-		restoreRect(SaveHandles[slot])
+		SaveHandles[slot].Restore()
 		pic := -1
 		if slot == DISP_UP {
 			if InvUpArrow {
@@ -667,7 +663,7 @@ func DisplayInventory() {
 	if OpenBag != nil {
 		picToScreen(ICON_INV+6, 0xEC, 0x77)
 	} else {
-		restoreRect(1) // as DOS: handle 1, not SaveHandles[1]
+		SaveHandles[1].Restore() // the backpack background (FM Towns; DOS passes handle 1)
 	}
 	displayInventoryArray(6, DISP_DOWN)
 }
@@ -679,7 +675,7 @@ func displayInventoryArray(from, to int) {
 	mouseHide()
 	gr.Transparency = true
 	for i := from; i <= to; i++ {
-		restoreRect(SaveHandles[i])
+		SaveHandles[i].Restore()
 		qty[i] = 1
 		if i <= DISP_BAG {
 			slot := int(DisplayToSlot()[i])
@@ -717,7 +713,7 @@ func displayEnc(show bool) bool {
 	drawn := false
 	left := int(int16(player.MaxWeight)) - int(int16(player.Weight))
 	if shownCapacity != left {
-		restoreRect(SaveHandles[0])
+		SaveHandles[0].Restore()
 		shownCapacity = left
 		drawn = show
 		gr.ForegroundColor = 0xE0

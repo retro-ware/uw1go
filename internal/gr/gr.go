@@ -40,9 +40,9 @@ var (
 	penColor byte
 	penFB    bool // fbuf_setcolor: the primitives draw into the frame buffer
 
-	// ColorData is Color_data_ptr: per pen, a word; the save and restore pens (0x100, 0x101)
-	// keep their video memory block here.
-	ColorData [0x110]int16
+	// PenBlock is the video memory block the save and restore pens (0x100, 0x101) use
+	// (Color_data_ptr's words for them).
+	PenBlock *Block
 
 	// Palette is the palette being built (6-bit RGB); DAC is what the screen shows.
 	// LocalDoPalette copies one to the other.
@@ -101,8 +101,8 @@ func SetTheWindow(x0, y0, x1, y1 int) {
 	WinLeft, WinTop, WinRight, WinBottom = x0, y0, x1, y1
 }
 
-// SetTheColor selects the pen: a colour, or 0x100 save to the block in ColorData[0x100],
-// 0x101 restore from the block in ColorData[0x101], 0x106 copy from the other page.
+// SetTheColor selects the pen: a colour, or 0x100 save to PenBlock, 0x101 restore from
+// it, 0x106 copy from the other page.
 func SetTheColor(c int) {
 	pen = c
 	penColor = byte(c)
@@ -159,11 +159,8 @@ type spanState struct {
 
 func newSpanState() *spanState {
 	st := &spanState{}
-	switch pen {
-	case 0x100:
-		st.blk = VBlock(int(ColorData[0x100]))
-	case 0x101:
-		st.blk = VBlock(int(ColorData[0x101]))
+	if pen == 0x100 || pen == 0x101 {
+		st.blk = PenBlock
 	}
 	return st
 }

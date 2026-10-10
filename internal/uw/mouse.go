@@ -82,12 +82,7 @@ func initMouse() int {
 	conX0, conY0 = 0, 0
 	maxX, maxY = 0x13F, 0xC7
 	setMouseData(ICON_CURSORS)
-	hd := gr.Valloc(0x28, 0x28)
-	if hd == 0 {
-		return -1
-	}
-	gr.ColorData[0x100] = int16(hd)
-	gr.ColorData[0x101] = int16(hd)
+	gr.PenBlock = gr.NewBlock(0x28, 0x28)
 	for i := range rgnLeft {
 		rgnLeft[i] = 10000
 	}
@@ -595,7 +590,7 @@ func mousReSave3d() {
 			mouseX+cursW-hotspotX-m3dx-1, mouseY-curH+hotspotY-m3dy+m3dh)
 	case m3dt == 1 && inplist.mode == MODE_GAME:
 		gr.ShowClip = true
-		gr.VCopyFB(mouseX-hotspotX-m3dx, mouseY+hotspotY-m3dy+m3dh, cursW, curH+1, int(gr.ColorData[0x100]))
+		gr.PenBlock.CopyFB(mouseX-hotspotX-m3dx, mouseY+hotspotY-m3dy+m3dh, cursW, curH+1)
 		gr.ShowClip = false
 	default:
 		return

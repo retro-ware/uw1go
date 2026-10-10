@@ -1,5 +1,7 @@
 package uw
 
+import "github.com/memmaker/uw1go/internal/gr"
+
 // Port of BAGS.C: open bags in the inventory panel. Bags opened inside bags form a chain
 // (OpenBag is the innermost).
 
@@ -11,7 +13,7 @@ type Bag struct {
 }
 
 // BagSaveHandles are the backpack slots' screen saves while a bag is open.
-var BagSaveHandles [8]int
+var BagSaveHandles [8]*gr.Block
 
 // DoSpecialActions handles a click on display position slot that is not a pick-up or
 // put-down: the bag's arrows and picture, the 3D view, the barter area, the weapon hand,
@@ -97,7 +99,7 @@ func FixBagArea() {
 	}
 	mouseHide()
 	if (scrmode == 1 || scrmode == 4) && RightPanel == 0 {
-		restoreRect(SaveHandles[1])
+		SaveHandles[1].Restore()
 		DisplayInventory()
 	}
 	mouseShow()
@@ -208,11 +210,11 @@ func OpenTheBag(slot int) {
 		if (scrmode == 1 || scrmode == 4) && RightPanel == 0 {
 			picToScreen(ICON_INV+6, 0xEC, 0x77)
 		}
-		if BagSaveHandles[0] == 0 {
+		if BagSaveHandles[0] == nil {
 			for j := DISP_PACK; j <= DISP_PACK_LAST; j++ {
 				r := &InvDisplay[j]
-				BagSaveHandles[j-DISP_PACK] = valloc(int(r.w), int(r.h))
-				saveRect(BagSaveHandles[j-DISP_PACK], r.x, r.y, int(r.w), int(r.h))
+				BagSaveHandles[j-DISP_PACK] = gr.NewBlock(int(r.w), int(r.h))
+				BagSaveHandles[j-DISP_PACK].Save(r.x, r.y, int(r.w), int(r.h))
 			}
 		}
 		mouseShow()

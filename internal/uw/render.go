@@ -2,16 +2,20 @@ package uw
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/memmaker/uw1go/internal/gr"
 	"github.com/memmaker/uw1go/internal/render"
 )
 
-// The bridge to the renderer (internal/render): it is loaded from UW.EXE on first use,
-// draws what the database describes and asks the game, through renderArt, for the
-// level's textures and the objects' and critters' pictures.
+// The bridge to the renderer (internal/render), which is loaded from UW.EXE on first use:
+// the frame's camera and window, the level's textures and the objects' and critters'
+// pictures.
 
-var rend *render.Renderer
+var (
+	rend       *render.Renderer
+	frameStart time.Time // when the frame being drawn began
+)
 
 // segSeg048 is the graphics library's data, where the distance shading's defaults are.
 const segSeg048 = 0x3963
@@ -30,7 +34,6 @@ func initRenderer() {
 		pfatal(err.Error())
 	}
 	rend = r
-	rend.Art = renderArt{}
 	render.Debugf = dprintf
 	d := exeBytes(segSeg048, 0x64C, 6)
 	smoothDiv = int16(le16(d, 0))
@@ -40,17 +43,15 @@ func initRenderer() {
 	rend.SetSmooth(int(smoothDiv), int(smoothBase), int(smoothLowpass))
 }
 
-// rmem is the renderer's data segment, which the database writers address by offset.
-func rmem() []byte {
-	initRenderer()
-	return rend.Mem
-}
-
-// syncRender gives the renderer the frame's camera and window.
-func syncRender() {
+// beginFrame starts a frame of the view from the current camera (cPlayer): a pick frame,
+// flat faces untextured, distance shading.
+func beginFrame(pick, flat, smooth bool) {
+	frameStart = time.Now()
 	initRenderer()
 	c := &cPlayer
 	rend.SetCamera(render.Camera{X: c.x, Y: c.y, Z: c.z, Heading: c.heading, Pitch: c.pitch, Bank: c.bank})
+	rend.Resize(xwid, xhgt)
+	rend.Begin(pick, flat, smooth)
 }
 
 // levelTex is the renderer's texture table: walls 0..47 and floors 48..57 at full size,
@@ -78,17 +79,10 @@ func texFirstPixel(i int) byte {
 	return 0
 }
 
-// renderArt hands the renderer the game's pictures.
-type renderArt struct{}
-
-func (renderArt) Texture(i int) []byte { return levelTex(i) }
-func (renderArt) GrPic(i int) []byte   { return slotPic(i) }
-func (renderArt) MouseQ()              { mousQUp(true) }
-
-// ObjectPic is do_uwobj's picture: below 1C0h an object's (its slot from obj_tab), from
+// objectPic is do_uwobj's picture: below 1C0h an object's (its slot from obj_tab), from
 // there the animations; decoded with its auxiliary palette (numbers from 20h fold down to
 // (n-8)*2) and shaded.
-func (renderArt) ObjectPic(typ, shade int) (render.Pic, bool) {
+func objectPic(typ, shade int) (render.Pic, bool) {
 	slot := firstAnim + typ - 0x1C0
 	if typ < 0x1C0 {
 		if typ < 0 || 2*typ >= len(objTab) {
@@ -117,13 +111,13 @@ func decodePic(bm, pal []byte, shade, hotX, hotY int) (render.Pic, bool) {
 	if w == 0 || h == 0 || len(px) < w*h {
 		return render.Pic{}, false
 	}
-	return render.Pic{Pix: append([]byte(nil), px[:w*h]...), W: w, H: h, HotX: hotX, HotY: hotY}, true
+	return render.Pic{Pix: px[:w*h], W: w, H: h, HotX: hotX, HotY: hotY}, true
 }
 
-// CritterPic is do_uwcrit's and parse_cpg's frame: the critter's animation file and
+// critterPic is do_uwcrit's and parse_cpg's frame: the critter's animation file and
 // palette from ASSOC.ANM, the page the frame is on from the pages' frame counts, and in
 // the page the frame's slot, its picture for the variant and the palette.
-func (renderArt) CritterPic(typ, shade, frame, variant int) (render.Pic, bool) {
+func critterPic(typ, shade, frame, variant int) (render.Pic, bool) {
 	if typ < 0 || 2*typ+1 >= len(crAssoc) || crAssoc[2*typ] == 0xFF {
 		return render.Pic{}, false
 	}
@@ -320,14 +314,3 @@ func preloadCr(loadPages bool) bool {
 
 // NightCleanCritPages drops the cached critter pages, after sleep.
 func NightCleanCritPages() { clear(crPages) }
-
-func rmemR16(off int) int {
-	m := rmem()
-	return int(m[off]) | int(m[off+1])<<8
-}
-
-func rmemW16(off, v int) {
-	m := rmem()
-	m[off] = byte(v)
-	m[off+1] = byte(v >> 8)
-}

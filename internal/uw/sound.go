@@ -257,7 +257,7 @@ func turnMusic(on bool) {
 	if on && !musicOn {
 		musicOn = true
 		if xmiSequence == -1 {
-			seg014_1DC5_15C5()
+			setRandomWalkingMusic()
 			loadNewMusic(newmusic, true)
 		}
 		snd.StartSequence(xmiSequence)
@@ -273,7 +273,7 @@ func turnFx(on bool) {
 	}
 	fxOn = on
 	if !fxOn {
-		seg014_1DC5_C7C()
+		killAllEffects()
 	}
 }
 
@@ -390,8 +390,8 @@ func killEffect(n int) {
 	}
 }
 
-// seg014_1DC5_C7C silences every effect (UW2's kill_all_effects).
-func seg014_1DC5_C7C() {
+// killAllEffects silences every effect (UW2's kill_all_effects).
+func killAllEffects() {
 	for i := 0; i < 4; i++ {
 		if fxMask&(1<<uint(i)) != 0 {
 			fxMask -= 1 << uint(i)
@@ -619,8 +619,8 @@ func freeSounds() { snd.Shutdown() }
 // setNewMusic asks for theme m; changeMusicMaybe starts it.
 func setNewMusic(m int) { newmusic = m }
 
-// seg014_1DC5_15C5 picks a walking theme at random (UW2's set_random_walking_music).
-func seg014_1DC5_15C5() { newmusic = rand()%3 + MUSIC_WALK_FIRST }
+// setRandomWalkingMusic picks a walking theme at random (UW2's set_random_walking_music).
+func setRandomWalkingMusic() { newmusic = rand()%3 + MUSIC_WALK_FIRST }
 
 // loopMusicMaybe restarts the theme when it has ended; theme 1 is followed by theme 4.
 func loopMusicMaybe() {
