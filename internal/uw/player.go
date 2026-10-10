@@ -7,9 +7,8 @@ var (
 	MoveCrits = true
 	PMsHndle  int
 
-	regionSouth, rgnhUL, rgnhLeft, regionBR, regionDL, regionUp, hrgnUR, rgnhR int
-	PHgt, PLeft, PBot, PWid                                                    int
-	curvrad                                                                    int
+	PHgt, PLeft, PBot, PWid int
+	curvrad                 int
 )
 
 // ih adapts a handler taking an int argument.
@@ -133,28 +132,18 @@ func initPlayer() {
 	inputAddkey(KEY_ALT|KEY_F8, 0, 0x1B, func(any) { reportLoc() })
 }
 
-// mousPlayer makes the 3D view the given rectangle: a click region and eight cursor
-// regions round its edges.
+// mousPlayer makes the 3D view the given rectangle and its click region. The DOS game also
+// put eight cursor regions round its edges, arrows for walking with the mouse; here the keys
+// walk, so the pointer stays a pointer.
 func mousPlayer(left, bot, wid, hgt int) {
 	inputDel(PMsHndle)
 	PLeft, PBot, PWid, PHgt = left, bot, wid, hgt
 	PMsHndle = inputAddmouse(left, bot, left+wid-1, bot+hgt-1, 0, 0x1B, ih(mousIn3d))
-	rgnhUL = defineMouseRegion(left, bot, left+wid*5/15, bot+hgt*3/15, 0x106F)
-	hrgnUR = defineMouseRegion(left+wid-wid*5/15, bot, left+wid-1, bot+hgt*3/15, 0x1070)
-	regionUp = defineMouseRegion(left+wid*5/15, bot, left+wid-wid*5/15, bot+hgt*3/15, 0x106E)
-	rgnhLeft = defineMouseRegion(left, bot+hgt*3/15, left+wid*5/15, bot+hgt*6/15, 0x1071)
-	rgnhR = defineMouseRegion(left+wid-wid*5/15, bot+hgt*3/15, left+wid-1, bot+hgt*6/15, 0x1072)
-	regionSouth = defineMouseRegion(left+wid*5/15, bot+hgt*6/15, left+wid-wid*5/15, bot+hgt-1, 0x106D)
-	regionDL = defineMouseRegion(left, bot+hgt*6/15, left+wid*5/15, bot+hgt-1, 0x1073)
-	regionBR = defineMouseRegion(left+wid-wid*5/15, bot+hgt*6/15, left+wid-1, bot+hgt-1, 0x1074)
 }
 
 func demousPlayer() {
 	inputDel(PMsHndle)
 	PMsHndle = 0
-	for _, r := range []int{rgnhUL, hrgnUR, rgnhLeft, rgnhR, regionUp, regionSouth, regionDL, regionBR} {
-		undefineMouseRegion(r)
-	}
 }
 
 func reportLoc() {

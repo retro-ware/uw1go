@@ -20,10 +20,8 @@ var (
 	MoveCamera  bool
 	ForwInpRate int16
 	TurnInpRate int16
-	KeybUsed    bool
 
-	mouseMoves = [3]int16{PIN_LEFT, PIN_BACK, PIN_RIGHT}
-	moveKeys   = [9]byte{0x11, 0x1F, 0x1E, 0x20, 0x2C, 0x2E, 0x2D, 0x12, 0x10}
+	moveKeys = [9]byte{0x11, 0x1F, 0x1E, 0x20, 0x2C, 0x2E, 0x2D, 0x12, 0x10}
 	// UltimaHacks' movementKeys, the key held for each of moveKeys' meanings (run,
 	// walk, turn left, turn right, slide left, slide right, back, fly up, fly down): w, x, the
 	// grey Left and Right (0x69 and 0x6A in keyOn: KEY puts E0 keys at 0x60 and up), a, d, s,
@@ -48,52 +46,8 @@ var (
 	vortX, vortY       byte
 )
 
-// playerMousMove: the mouse button is down in the 3D view. It moves the Wizard Eye
-// camera, or reads the mouse as movement and keeps the pointer inside the view.
-func playerMousMove() {
-	if WizEye {
-		moveCam(0)
-		return
-	}
-	parsePlayin(-1)
-	if pmouseHandled == 0 {
-		mouseConstrain(PLeft, PBot, PLeft+PWid-1, PBot+PHgt-1)
-	}
-	pmouseHandled = 2
-}
-
-// parsePlayin sets the movement command: -1 reads the mouse, anything else is a key
-// binding's command.
+// parsePlayin sets the movement command of a key binding (the jumps).
 func parsePlayin(command int) {
-	KeybUsed = command >= 0
-	if !KeybUsed {
-		buttons := mouseGetbut()
-		switch {
-		case buttons == 1 || buttons&1 != 0 && player.Drawn() != 0:
-			ForwInpRate, TurnInpRate = 0, 0
-			x, y := inplist.x, inplist.y
-			if y < PHgt/5 {
-				PlayerInput = mouseMoves[x*3/PWid]
-			} else {
-				if x < PWid/3 {
-					TurnInpRate = int16(-((PWid/3 - x) * 0x180) / PWid)
-				}
-				if x > PWid*2/3 {
-					TurnInpRate = int16((x - PWid*2/3) * 0x180 / PWid)
-				}
-				if y > PHgt*2/5 {
-					ForwInpRate = int16((y - PHgt*2/5) * 0xC0 / PHgt)
-				}
-				PlayerInput = PIN_FORWARD
-			}
-		case buttons == 3:
-			PlayerInput = PIN_FORWARD
-			if PN.Terrain&FOOT_AIR == 0 && player.MotionState != MS_SWIM {
-				PlayerInput = PIN_JUMP
-			}
-		}
-		return
-	}
 	doPlayerKeyboard()
 	switch command {
 	case PIN_RUN_JUMP, PIN_JUMP:

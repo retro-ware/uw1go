@@ -434,66 +434,152 @@ func player3duse() {
 	}
 }
 
-// player3dattack: the swing is the ninth of the view clicked.
+// The swings of the attack types, from the 3D view's middle column (the swing also sets
+// how high the blow lands): low, middle, high.
+const (
+	swingThrust = 2
+	swingSlash  = 5
+	swingBash   = 8
+)
+
+// player3dattack starts a blow while armed: the left button slashes, the right thrusts
+// (Space bashes, keyAttack). Each is charged while its button is held.
 func player3dattack() {
-	n := inplist.x*3/(PWid+2) + inplist.y*3/(PHgt+2)*3
-	playerAttack(n + 1)
+	btn, swing := 1, swingSlash
+	if inplist.cmd&1 == 0 {
+		btn, swing = 2, swingThrust
+	}
+	if pQatt == 0 {
+		attackButton = btn
+	}
+	playerAttack(swing)
 }
 
 var playerDisp = [5]func(){player3duse, player3dattack, player3dlook, player3dget, player3dtalk}
 
-// mousIn3d is the 3D view's mouse handler.
-func mousIn3d(int) {
-	if inplist.cmd&1 != 0 {
-		playerMousMove()
+// The indices of playerDisp that contextAction chooses from.
+const (
+	actUse  = 0
+	actLook = 2
+	actGet  = 3
+	actTalk = 4
+)
+
+// contextAction is what a left click (or E) does to newPlObj, just picked, when no icon
+// says otherwise. There is no overlap: a creature is talked to, a thing that can be carried
+// is taken, a fixture that works (doors, levers and buttons, chests, the shrine, fountains)
+// is used, and the rest is looked at. A trigger on the object decides first, so that a
+// puzzle's look or use trigger still fires. Out of reach a take or use is a look.
+func contextAction() int {
+	o := newPlObj
+	item := o.Item()
+	if IsMobElem(o) && o.Major() == MAJOR_CREATURE || item == ITEM_SOUND_SOURCE { // as UltimaHacks' E
+		return actTalk
 	}
-	if inplist.mode == MODE_GAME {
-		newPlObj = nil
-		if inplist.cmd&2 == 0 {
-			return
+	if !InPickRange(PickDist, o, PickMap) || BlockingTerrain(PickDist, o) {
+		return actLook
+	}
+	if releaseable {
+		return actGet
+	}
+	if o.IsQuant() == 0 && o.LinkF() != 0 {
+		link := &o.OL
+		if t := ObjInList(&link, false, MAJOR_TRAP, -1, -1); t != nil {
+			switch t.Item() {
+			case ITEM_USE_TRIGGER:
+				return actUse
+			case ITEM_LOOK_TRIGGER:
+				return actLook
+			}
 		}
-		switch GameInputMode {
-		case GIM_NONE:
-			how := 2
-			if RightButtonThing != IMODE_DEFAULT {
+	}
+	switch {
+	case o.Major() == MAJOR_RECT && o.Minor() != 1, // doors, levers, switches, buttons, writing
+		item == ITEM_SHRINE, item == ITEM_BARREL, item == ITEM_CHEST, item == ITEM_URN,
+		item == ITEM_ANVIL, item == ITEM_FOUNTAIN_12E, item == ITEM_FOUNTAIN_1C9,
+		item == ITEM_CAULDRON, item == ITEM_SILVER_TREE, item == ITEM_MOVING_DOOR:
+		return actUse
+	}
+	return actLook
+}
+
+// actOn does contextAction's choice; a take says first what is taken.
+func actOn(how int) {
+	if how == actGet {
+		LookAt(newPlObj, 1)
+	}
+	playerDisp[how]()
+}
+
+// armed: the weapon is drawn (F5), and the left button attacks.
+func armed() bool { return RightButtonThing == IMODE_FIGHT && player.Drawn() != 0 }
+
+// mousIn3d is the 3D view's mouse handler. The buttons never walk (the keys do). The left
+// acts on what is under the pointer, as the selected icon says or by context, and drops or
+// throws what is carried; the right looks. While armed the left slashes, the right thrusts.
+func mousIn3d(int) {
+	if inplist.mode != MODE_GAME {
+		if inplist.mode == 0x10 && inplist.cmd == 2 {
+			if newPlObj = pick3d(2); newPlObj != nil {
+				player3duse()
+			}
+		}
+		return
+	}
+	left := inplist.cmd&1 != 0
+	if armed() && inplist.cmd&3 != 0 {
+		if GameInputMode == GIM_NONE {
+			player3dattack()
+		}
+		return
+	}
+	newPlObj = nil
+	if inplist.cmd == 0 {
+		return
+	}
+	switch GameInputMode {
+	case GIM_NONE:
+		how := actLook
+		if left {
+			how = -1
+			if RightButtonThing != IMODE_DEFAULT && RightButtonThing != IMODE_FIGHT {
 				how = RightButtonThing - 1
 			}
-			if how != 1 {
-				if inplist.cmd&1 != 0 {
-					break
-				}
-				newPlObj = pick3d(2)
-				if newPlObj == nil {
-					lookNothing(how, pTxtId)
-					mouseRelease(true)
-					break
-				}
-			}
-			playerDisp[how]()
-		case GIM_CARRY:
-			DoSpecialActions(0x17)
-			mouseRelease(true)
-		case GIM_TARGET:
-			if newPlObj = pick3d(2); newPlObj != nil {
-				if InPickRange(PickDist, newPlObj, PickMap) && !BlockingTerrain(PickDist, newPlObj) {
-					ObjectActor(newPlObj, 1, 0)
-				} else {
-					gameSprint(0x5E)
-				}
-			}
-			if CursorObjPtr != nil {
-				unforceMouseCursor(3)
-				CursorObjPtr = nil
-				GameInputMode = GIM_NONE
-			}
-			mouseRelease(true)
-		case GIM_AIM:
-			BlastFunction()
 		}
-	} else if inplist.mode == 0x10 && inplist.cmd == 2 {
+		newPlObj = pick3d(2)
+		if newPlObj == nil {
+			lookNothing(max(how, actLook), pTxtId)
+			mouseRelease(true)
+			break
+		}
+		if how < 0 {
+			how = contextAction()
+		}
+		if how == actLook {
+			player3dlook()
+			break
+		}
+		mouseRelease(true) // a click: a take puts the thing on the pointer, not dragged
+		actOn(how)
+	case GIM_CARRY:
+		DoSpecialActions(0x17)
+		mouseRelease(true)
+	case GIM_TARGET:
 		if newPlObj = pick3d(2); newPlObj != nil {
-			player3duse()
+			if InPickRange(PickDist, newPlObj, PickMap) && !BlockingTerrain(PickDist, newPlObj) {
+				ObjectActor(newPlObj, 1, 0)
+			} else {
+				gameSprint(0x5E)
+			}
 		}
+		if CursorObjPtr != nil {
+			unforceMouseCursor(3)
+			CursorObjPtr = nil
+			GameInputMode = GIM_NONE
+		}
+		mouseRelease(true)
+	case GIM_AIM:
+		BlastFunction()
 	}
 }
 

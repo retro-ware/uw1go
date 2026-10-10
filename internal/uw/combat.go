@@ -13,6 +13,8 @@ var (
 	swingKeys = [3]int{0x34, 0x27, 0x19}
 	pQatt     = 0
 	attackKey = -1
+	// the mouse button holding the blow (1 left, 2 right), 0 when a key does
+	attackButton = 0
 	// by hit location: the height of the blood splash; [4] is set to -hitz before use
 	hitzTab = [5]int{5, 3, 1, 7, 0}
 
@@ -484,7 +486,7 @@ func playerAttack(swing int) {
 	if attackKey > 0 {
 		held = keyOn[attackKey] != 0
 	}
-	held = held || mouseGetbut()&2 != 0
+	held = held || mouseGetbut()&attackButton != 0
 	if pQatt > 0 {
 		return
 	}
