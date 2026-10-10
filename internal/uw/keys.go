@@ -49,9 +49,8 @@ func keyBag(how int) {
 	}
 }
 
-// keyInteract: q looks (0), e acts (1) at the pointer, as a right or a left click there
-// would (after UltimaHacks' interactAtCursor): only in the 3D view, and no act while
-// carrying something or aiming.
+// keyInteract: q looks (0), e uses (1) what is at the pointer (after UltimaHacks'
+// interactAtCursor): only in the 3D view, and no use while carrying something or aiming.
 func keyInteract(use int) {
 	if GameInputMode != 0 && use != 0 {
 		return
@@ -70,8 +69,8 @@ func keyInteract(use int) {
 		}
 	case use == 0:
 		player3dlook()
-	default: // what a left click does with no icon selected
-		actOn(contextAction())
+	default:
+		player3duse()
 	}
 }
 
