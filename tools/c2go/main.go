@@ -197,9 +197,9 @@ type parser struct {
 	loc map[string]ty // locals
 }
 
-func (p *parser) peek() tok      { return p.ts[p.p] }
+func (p *parser) peek() tok       { return p.ts[p.p] }
 func (p *parser) peekN(n int) tok { return p.ts[p.p+n] }
-func (p *parser) next() tok      { t := p.ts[p.p]; p.p++; return t }
+func (p *parser) next() tok       { t := p.ts[p.p]; p.p++; return t }
 func (p *parser) is(s string) bool {
 	t := p.peek()
 	return (t.k == "op" || t.k == "id") && t.s == s
@@ -673,24 +673,25 @@ var funcs = map[string]sig{
 	"rol8": {[]ty{tU8, tU32}, tU8}, "ror8": {[]ty{tU8, tU32}, tU8}, "rcl8": {[]ty{tU8, tU32}, tU8}, "rcr8": {[]ty{tU8, tU32}, tU8},
 	"shld16": {[]ty{tU16, tU16, tU32}, tU16}, "shrd16": {[]ty{tU16, tU16, tU32}, tU16},
 	"mul8": {[]ty{tU8}, tNone}, "mul16": {[]ty{tU16}, tNone}, "imul8": {[]ty{tU8}, tNone}, "imul16": {[]ty{tU16}, tNone},
-	"imul16x": {[]ty{tU16, tU16}, tU16},
+	"imul16x":  {[]ty{tU16, tU16}, tU16},
 	"asm_div8": {[]ty{tU8}, tBool}, "asm_idiv8": {[]ty{tU8}, tBool}, "asm_div16": {[]ty{tU16}, tBool}, "asm_idiv16": {[]ty{tU16}, tBool},
 	"asm_divfault": {[]ty{tU16, tU16, tU32}, tU32},
 	"asm_call":     {[]ty{tU32, tU16}, tU32}, "asm_callf": {[]ty{tU32, tU16, tU16}, tU32},
-	"ASM_JMP":  {[]ty{tU16, tU16}, tU32},
-	"asm_int":  {[]ty{tU8}, tU32},
-	"asm_in8":  {[]ty{tU16}, tU8}, "asm_out8": {[]ty{tU16, tU8}, tNone}, "asm_out16": {[]ty{tU16, tU16}, tNone},
-	"asm_jcc":  {[]ty{tU8}, tBool},
-	"SET_DS":   {[]ty{tU16}, tNone}, "SET_ES": {[]ty{tU16}, tNone}, "SET_SS": {[]ty{tU16}, tNone},
+	"ASM_JMP": {[]ty{tU16, tU16}, tU32},
+	"asm_int": {[]ty{tU8}, tU32},
+	"asm_in8": {[]ty{tU16}, tU8}, "asm_out8": {[]ty{tU16, tU8}, tNone}, "asm_out16": {[]ty{tU16, tU16}, tNone},
+	"asm_jcc": {[]ty{tU8}, tBool},
+	"SET_DS":  {[]ty{tU16}, tNone}, "SET_ES": {[]ty{tU16}, tNone}, "SET_SS": {[]ty{tU16}, tNone},
 	"asm_flags": {nil, tU16}, "asm_set_flags": {[]ty{tU16}, tNone},
+	"perspAffine": {nil, tNone}, "perspWall": {nil, tNone},
 	"port_halt": {[]ty{tStr}, tNone}, "asm_bad_entry": {[]ty{tStr, tU16}, tNone},
 	"asm_halt_at":           {[]ty{tU16, tU16, tStr}, tNone},
 	"scalebm_run_generated": {[]ty{tU16}, tNone},
 	"palettesOff":           {nil, tU16}, "palettesSeg": {nil, tU16},
-	"memEq":                 {[]ty{tBase, tBase, tI32}, tBool},
-	"asm_glue_ret":          {nil, tU32}, "asm_glue_retf": {nil, tU32},
-	"port_dgroup_seg":       {nil, tU16},
-	"STEP":                  {[]ty{tI32}, tI32},
+	"memEq":        {[]ty{tBase, tBase, tI32}, tBool},
+	"asm_glue_ret": {nil, tU32}, "asm_glue_retf": {nil, tU32},
+	"port_dgroup_seg": {nil, tU16},
+	"STEP":            {[]ty{tI32}, tI32},
 }
 
 var regs16 = map[string]bool{"AX": true, "BX": true, "CX": true, "DX": true, "SI": true, "DI": true, "BP": true, "SP": true}
@@ -701,6 +702,7 @@ var globals = map[string]ty{
 	"pDS": tBase, "pES": tBase, "pSS": tBase,
 	"CODE000": tBase, "CODE001": tBase, "CODE002": tBase, "CODE003": tBase, "CODE004": tBase, "CODE015": tBase, "CODE019": tBase,
 	"c": tU32, "entry": tU16,
+	"Perspective": tBool,
 }
 
 type emitter struct {
@@ -1174,11 +1176,14 @@ func collectGotos(ss []*stmt, used map[string]bool) {
 // ---------------------------------------------------------------- main
 
 // fixups for the port's hand edits: the enhancements and test probes are off
-// in this port, and the few C objects become runtime calls.
+// in this port but for the perspective-correct mappers (internal/r3d/persp.go),
+// and the few C objects become runtime calls.
 var fixups = []struct{ re, repl string }{
 	{`\(void\)\w+;`, ``},
 	{`(?m)^\s*uint32_t c;`, ``},
 	{`persp_probe_next\(\);`, ``},
+	{`if \(ENHANCED\(ENH_PERSPECTIVE\)\) \{ persp_walk\(0\);`, `if (Perspective) { perspAffine();`}, // persp.go
+	{`if \(ENHANCED\(ENH_PERSPECTIVE\)\) \{ persp_walk\(1\);`, `if (Perspective) { perspWall();`},
 	{`if \(ENHANCED\([A-Z_]+\)\) \{[^\n]*\}\s*(/\*[^\n]*\*/)?\s*\n\s*else `, "\n    "},
 	{`if \(ENHANCED\([A-Z_]+\)\) \{[^\n]*\}[^\n]*\n`, "\n"},
 	{`persp_probe\(\) \? persp_probe_colour : `, ``},

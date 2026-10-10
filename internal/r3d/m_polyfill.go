@@ -1166,6 +1166,12 @@ L0566:
 	SP = rw(pDS, 0x5586)
 L056A:
 L056B:
+	if Perspective {
+		{
+			perspWall()
+			goto L0898
+		}
+	}
 	AX = CX
 L056D:
 	AX = (AX << 1)
