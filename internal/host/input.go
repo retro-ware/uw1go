@@ -83,7 +83,8 @@ var (
 	LookSpeed      = 100
 
 	lookCaptured   bool
-	lookSettle     int // ticks after a capture change whose motion is dropped
+	lookSettle     int  // ticks after a capture change whose motion is dropped
+	lockClick      bool // a click took the pointer back: its buttons are the host's until let go
 	lookFX, lookFY float64
 	lastCX, lastCY int
 )
@@ -139,6 +140,17 @@ func pollInput(g *game) {
 	}
 	dcx, dcy := cx-lastCX, cy-lastCY
 	lastCX, lastCY = cx, cy
+	pressed := ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft) ||
+		ebiten.IsMouseButtonPressed(ebiten.MouseButtonRight)
+	if MouseLook && ebiten.CursorMode() != ebiten.CursorModeCaptured {
+		// A browser locks the pointer only after a click and lets it go on Esc, and Ebitengine
+		// then shows a hidden cursor: the view stays still until a click takes it back.
+		dcx, dcy = 0, 0
+		if pressed && !lockClick {
+			ebiten.SetCursorMode(ebiten.CursorModeCaptured)
+			lockClick, lookSettle = true, 2
+		}
+	}
 	if lookSettle > 0 {
 		lookSettle--
 		dcx, dcy = 0, 0
@@ -182,6 +194,10 @@ func pollInput(g *game) {
 	}
 	if ebiten.IsMouseButtonPressed(ebiten.MouseButtonRight) {
 		b |= 2
+	}
+	if lockClick {
+		lockClick = pressed
+		b = 0
 	}
 	MouseButtons = b
 }

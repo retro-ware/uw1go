@@ -16,9 +16,9 @@ const (
 
 var (
 	lookOn       bool
-	lookWas      bool // it was on when the 3D view gave way
-	lookX, lookY int  // the pointer before it went on
-	lookOrient   int  // lookInvertY, lookInvertX
+	lookWas      = true // it was on when the 3D view gave way; it starts on
+	lookX, lookY int    // the pointer before it went on
+	lookOrient   int    // lookInvertY, lookInvertX
 )
 
 func mouseLookSet(on bool) {
@@ -33,10 +33,7 @@ func mouseLookSet(on bool) {
 			mouseSaved = false
 		}
 		lookX, lookY = mouseX, mouseY
-		mouseX = m3dx + m3dw/2 // the view's centre (m3dy its bottom edge)
-		mouseY = m3dy - m3dh/2
-		inX0, inX1 = mouseX, mouseX // a region of one point, so checkMouse keeps the cursor
-		hitY0, inY1 = mouseY, mouseY
+		lookCentre()
 		mousReSave()
 		if GameInputMode == 0 { // not while carrying something: its picture stays
 			setMouseData(ICON_CURSORS)
@@ -48,6 +45,15 @@ func mouseLookSet(on bool) {
 		checkMouse()
 		drawMouse()
 	}
+}
+
+// lookCentre puts the crosshair in the view's centre (m3dy is its bottom edge), again when
+// the view is placed: mouse look is on from the start, before the game screen has a view.
+func lookCentre() {
+	mouseX = m3dx + m3dw/2
+	mouseY = m3dy - m3dh/2
+	inX0, inX1 = mouseX, mouseX // a region of one point, so checkMouse keeps the cursor
+	hitY0, inY1 = mouseY, mouseY
 }
 
 // mouseLookToggle is the ` key.

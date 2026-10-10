@@ -1,5 +1,7 @@
 package uw
 
+import "math"
+
 // Port of PHYSICS.C: the player's physics. The terrain the player stands in and the
 // movement state it gives (newFPS), the step-and-turn movement (simpleFizix), the
 // per-tick setup from the input (setPlayerPhysParams), applying MOTION's result to the
@@ -14,12 +16,14 @@ var (
 	pFPS           [3]int16      // forward, side and backward speeds
 	lastTerr       int16
 	MaxPlayerAccel int16 = 0x60
-	BackFPS        int16 = 0xBC
-	SideFPS        int16 = 0xEB
-	RunFPS         int16 = 0x3AC
-	plyMoType      int16
-	motionbits     byte
-	fizUpdate      = true
+	// The game's sideways and backward speeds were 0xEB and 0xBC, a quarter and a fifth of
+	// running (0x3AC, 822 at the run key's rate): a slide was a shuffle. As in Quake they are
+	// nearer the forward speed (Quake's 350 and 400 against 400 running).
+	BackFPS    int16 = 0x240
+	SideFPS    int16 = 0x2D0
+	RunFPS     int16 = 0x3AC
+	motionbits byte
+	fizUpdate  = true
 )
 
 // waterSet starts swimming if terr has the water bit. It reports whether it did.
@@ -201,12 +205,15 @@ func setPlayerPhysParams(rate int) {
 	if PN.Acc[2] == 0 {
 		doPlayerInput(int(PlayerInput), rate, &speed)
 		if PN.Acc[2] == 0 {
+			// MaxPlayerAccel per 4 ticks of 1/256 s, rather than per call as the game had
+			// it: a call a frame made the speed up and the stop as slow as the frame rate.
+			most := int16(max(1, int(MaxPlayerAccel)*rate/4))
 			d := speed - PN.Speed
-			if abs16(d) > MaxPlayerAccel {
+			if abs16(d) > most {
 				if d > 0 {
-					d = MaxPlayerAccel
+					d = most
 				} else {
-					d = -MaxPlayerAccel
+					d = -most
 				}
 			}
 			PN.Speed += d
@@ -285,8 +292,8 @@ func playerSetup(x, y int) {
 	ObjAdd(&Level.Tiles[GrSq].Objects, ThePlayer)
 }
 
-// physAffectPlayer copies PN back to the player object after doPhysics, turns the
-// facing while sliding along a wall, and turns the impact into falling damage.
+// physAffectPlayer copies PN back to the player object after doPhysics and turns the
+// impact into falling damage.
 func physAffectPlayer() {
 	playerChangeSq()
 	ThePlayer.SetZ(int(PN.Z >> 3))
@@ -294,20 +301,9 @@ func physAffectPlayer() {
 	if PN.Impact != 0 && PN.Heading == PlayerHeading {
 		PN.Speed = 0
 	}
-	if PN.Heading != PlayerHeading {
-		PlayerHeading = PN.Heading
-		h := PN.Heading - plyMoType<<14
-		if PN.Flags&0x80 != 0 {
-			switch {
-			case abs16(PlayerFacing-h) < 0x400:
-				PlayerFacing = h
-			case uint16(PlayerFacing-h) < 0x7FFF:
-				PlayerFacing -= 0x400
-			default:
-				PlayerFacing += 0x400
-			}
-		}
-	}
+	// A slide along a wall bends the heading. The game turned the facing after it, 0x400 a
+	// tick; with the mouse aiming, only the mouse and the turn keys turn the view.
+	PlayerHeading = PN.Heading
 	ThePlayer.SetHeading(int(PlayerFacing >> 13))
 	ThePlayer.SetFineHead(int(PlayerFacing >> 8))
 	if PN.Impact != 0 {
@@ -346,23 +342,29 @@ func playerSqhandler(w *uint16) bool {
 func doPlayerInput(input, rate int, speed *int16) {
 	h := PlayerFacing
 	switch input {
-	case PIN_FORWARD:
+	case PIN_FORWARD: // the keys held together, as Quake adds them: W and A go diagonally
 		PlayerFacing += int16(rate * int(PlayerTurn) * int(TurnInpRate/4) / 4)
 		h = PlayerFacing
-		*speed = int16(int(pFPS[0]) * int(ForwInpRate>>2) / 32)
-		plyMoType = 0
+		f := int(pFPS[0]) * int(ForwInpRate>>2) / 32
+		if MoveBack {
+			f -= int(pFPS[2])
+		}
+		side := int(MoveSide) * int(pFPS[1])
+		if f != 0 || side != 0 {
+			// no faster on a diagonal than the faster of the two
+			off := int16(int32(math.Round(math.Atan2(float64(side), float64(f)) * 0x8000 / math.Pi)))
+			h += off
+			*speed = int16(max(abs(f), abs(side)))
+		}
 	case PIN_RIGHT:
 		h += 0x4000
 		*speed = pFPS[1]
-		plyMoType = 1
 	case PIN_LEFT:
 		h -= 0x4000
 		*speed = pFPS[1]
-		plyMoType = -1
 	case PIN_BACK:
 		h += -0x8000
 		*speed = pFPS[2]
-		plyMoType = -2
 	case PIN_RUN_JUMP, PIN_JUMP:
 		if input == PIN_RUN_JUMP {
 			if PN.Vel[2] != 0 || PN.Acc[2] != 0 || PN.Speed != 0 {
@@ -372,7 +374,6 @@ func doPlayerInput(input, rate int, speed *int16) {
 			PlayerHeading = h
 			*speed = pFPS[0] / 2
 			PN.Speed = *speed
-			plyMoType = 0
 		}
 		PN.Vel[2] = 0x263
 		if PN.Z > 0x280 {
@@ -388,11 +389,9 @@ func doPlayerInput(input, rate int, speed *int16) {
 		}
 		return
 	case PIN_UP:
-		plyMoType = 0
 		PN.Vel[2] = 0x8D
 		PN.Acc[2] = 0
 	case PIN_DOWN:
-		plyMoType = 0
 		PN.Vel[2] = -0x8D
 		PN.Acc[2] = 0
 	case PIN_NONE:

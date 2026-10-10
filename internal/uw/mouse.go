@@ -127,7 +127,12 @@ func mouseHide() {
 	}
 }
 
-func mous3dSet(x, y, w, h int) { m3dx, m3dy, m3dw, m3dh = x, y, w, h }
+func mous3dSet(x, y, w, h int) {
+	m3dx, m3dy, m3dw, m3dh = x, y, w, h
+	if lookOn {
+		lookCentre()
+	}
+}
 
 func mousIn3dP() bool { return mouseCheckReg(m3dx, m3dy-m3dh, m3dx+m3dw, m3dy) }
 

@@ -20,6 +20,8 @@ var (
 	MoveCamera  bool
 	ForwInpRate int16
 	TurnInpRate int16
+	MoveSide    int16 // the slide keys held with PIN_FORWARD: -1 left, 1 right
+	MoveBack    bool  // the back key held with PIN_FORWARD
 
 	moveKeys = [9]byte{0x11, 0x1F, 0x1E, 0x20, 0x2C, 0x2E, 0x2D, 0x12, 0x10}
 	// UltimaHacks' movementKeys, the key held for each of moveKeys' meanings (run,
@@ -57,15 +59,18 @@ func parsePlayin(command int) {
 			PlayerInput = PIN_FORWARD
 		}
 	case PIN_NONE:
-		TurnInpRate, ForwInpRate = 0, 0
+		TurnInpRate, ForwInpRate, MoveSide, MoveBack = 0, 0, 0, false
 		PlayerInput = int16(command)
 	}
 }
 
 // doPlayerKeyboard reads the movement keys held down (UltimaHacks' keys, modernKeys), with
 // Shift or Ctrl held too (its fly keys) but not with both Alt and Ctrl (the rune keys).
+// Running, walking, backing, sliding and turning add up into one PIN_FORWARD, which
+// doPlayerInput turns into a direction, where the game took the last key alone: a slide
+// stopped a run, so there was no diagonal.
 func doPlayerKeyboard() {
-	TurnInpRate, ForwInpRate = 0, 0
+	TurnInpRate, ForwInpRate, MoveSide, MoveBack = 0, 0, 0, false
 	if altDown() && ctrlDown() {
 		return
 	}
@@ -76,34 +81,31 @@ func doPlayerKeyboard() {
 		switch k {
 		case 0x11:
 			ForwInpRate = 0x70
-			PlayerInput = PIN_FORWARD
 		case 0x1F:
-			ForwInpRate = 0x32
-			PlayerInput = PIN_FORWARD
+			ForwInpRate = max(ForwInpRate, 0x32)
 		case 0x1E:
-			TurnInpRate = -0x5A
-			PlayerInput = PIN_FORWARD
+			TurnInpRate -= 0x5A
 		case 0x20:
-			TurnInpRate = 0x5A
-			PlayerInput = PIN_FORWARD
+			TurnInpRate += 0x5A
 		case 0x2D:
-			TurnInpRate, ForwInpRate = 0, 0
-			PlayerInput = PIN_BACK
+			MoveBack = true
 		case 0x2C:
-			TurnInpRate, ForwInpRate = 0, 0
-			PlayerInput = PIN_LEFT
+			MoveSide--
 		case 0x2E:
-			TurnInpRate, ForwInpRate = 0, 0
-			PlayerInput = PIN_RIGHT
-		case 0x12:
-			if motionbits&(MB_LEVITATE|MB_FLY) != 0 { // UltimaHacks' fly keys do nothing on the ground
-				PlayerInput = PIN_UP
-			}
-		case 0x10:
-			if motionbits&(MB_LEVITATE|MB_FLY) != 0 {
-				PlayerInput = PIN_DOWN
-			}
+			MoveSide++
 		}
+		switch {
+		case k != 0x12 && k != 0x10:
+			PlayerInput = PIN_FORWARD
+		case motionbits&(MB_LEVITATE|MB_FLY) == 0: // UltimaHacks' fly keys do nothing on the ground
+		case k == 0x12:
+			PlayerInput = PIN_UP
+		default:
+			PlayerInput = PIN_DOWN
+		}
+	}
+	if ForwInpRate != 0 && MoveBack { // forward and back cancel, as in Quake
+		ForwInpRate, MoveBack = 0, false
 	}
 }
 
@@ -202,7 +204,8 @@ func movePlayer(incr int) {
 	physAffectPlayer()
 	editchng(10)
 	if PN.Terrain&FOOT_AIR == 0 {
-		if PN.Speed > pFPS[0]>>2 && PlayerInput == PIN_FORWARD {
+		sliding := PlayerInput == PIN_FORWARD && MoveSide != 0 && ForwInpRate == 0 && !MoveBack
+		if PN.Speed > pFPS[0]>>2 && PlayerInput == PIN_FORWARD && !sliding && !MoveBack {
 			bob := int8(PN.Speed*4/(pFPS[0]>>1) - 1)
 			if bob < 2 {
 				bob = 2
@@ -216,7 +219,7 @@ func movePlayer(incr int) {
 			doMod = true
 			PlayerInput = PIN_NONE
 		}
-		if PlayerInput == PIN_LEFT || PlayerInput == PIN_RIGHT {
+		if PlayerInput == PIN_LEFT || PlayerInput == PIN_RIGHT || sliding {
 			doMod = true
 			playerMod[0] = int16(sliEffect[tsteps>>4]) * 2
 		}
