@@ -363,6 +363,9 @@ func player3dget() {
 			release3d(newPlObj)
 			GameInputMode = GIM_CARRY
 			DoInventoryDrag(newPlObj)
+			if lookOn {
+				stowCarried()
+			}
 		}
 	case releaseable:
 		gameSprint(b2i(inrange) + 0x5D)
@@ -382,6 +385,25 @@ func player3dget() {
 			gameSprint(0x60)
 		}
 		mouseRelease(true)
+	}
+}
+
+// stowCarried puts what the pointer carries in the pack (or the open bag), as clicks on its
+// slots would: onto a stack of the same thing first, else in the first empty slot. A take
+// in mouse look goes this way, as its pointer cannot drag; a full pack leaves it carried.
+func stowCarried() {
+	for pass := 0; pass < 2 && CursorObjPtr != nil; pass++ {
+		for d := DISP_PACK; d < DISP_PACK+8 && CursorObjPtr != nil; d++ {
+			slot := int(DisplayToSlot()[d])
+			in := AskInventory(slot)
+			if pass == 0 && in != nil && AddTogether(CursorObjPtr, in) || pass == 1 && in == nil {
+				RearrangeInventory(slot)
+			}
+		}
+	}
+	if CursorObjPtr == nil {
+		GameInputMode = GIM_NONE
+		unforceMouseCursor(3)
 	}
 }
 

@@ -63,9 +63,7 @@ func initPlayer() {
 		playerNameHandle = makeString(&name, STRBLK_PLAYER)
 	}
 	// the original's letter keys (w s a d z c x e q, W A S D X) are UltimaHacks' below
-	inputAddmouse(0x6B, 0x21, 0x7B, 0x2F, -1, 1, ih(playerSimpleMove))
-	inputAddmouse(0x82, 0x1F, 0x92, 0x2C, 0, 1, ih(playerSimpleMove))
-	inputAddmouse(0x9B, 0x21, 0xAA, 0x2F, 1, 1, ih(playerSimpleMove))
+	// the turn and step buttons under the view are art only: the mouse never walks
 	inputAddkey('2', 0, 0x11, ih(chgPlyp))
 	inputAddkey('`', 0, 0x11, func(any) { mouseLookToggle() })
 	inputAddkey(KEY_ALT|'`', 0, 0x11, func(any) { mouseLookOrient() })

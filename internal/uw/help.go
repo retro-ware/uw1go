@@ -47,7 +47,8 @@ var helpPages = []helpPage{
 		{"#", "Inventory"},
 		{"", "Left-click an item to pick it up or put it down,"},
 		{"", "right-click it to look at it. Carrying something, a"},
-		{"", "left click in the view drops or throws it."},
+		{"", "left click in the view drops or throws it. In mouse"},
+		{"", "look a take goes straight into the pack."},
 	}}},
 	{title: "Keys: Moving and Acting", keyW: []int{56, 44}, cols: [][]helpRow{{
 		{"#", "Moving"},
