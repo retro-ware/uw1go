@@ -34,7 +34,7 @@ var helpPages = []helpPage{
 		{"#", "Moving"},
 		{"", "Walk with the keys: W runs, X walks, S backs up, A"},
 		{"", "and D slide, the grey arrow keys turn. Shift jumps."},
-		{"", "Mouse look (` or ^, left of 1) aims with the mouse."},
+		{"", "The mouse aims. ` or ^ (left of 1) frees the pointer."},
 		{"#", "Acting"},
 		{"", "Left-click people to talk, items to take them, and"},
 		{"", "anything else to look at it. Right-click or E uses:"},
@@ -64,7 +64,7 @@ var helpPages = []helpPage{
 		{"1  3", "look up, down"},
 		{"grey ^ v", "look up, down"},
 		{"2  pad 5", "look ahead"},
-		{"`  ^", "mouse look on, off"},
+		{"`  ^", "mouse look off, on"},
 		{"", "(the key left of 1)"},
 		{"Alt+`  Alt+^", "mouse look axes"},
 	}, {
