@@ -734,48 +734,24 @@ func asm_bad_entry(module string, entry uint16) {
 
 // ---------------------------------------------------------------- divide faults
 
-// asm_divfault runs the divide fault handler the renderer installed: the
-// handler's offset in seg004 is the word at seg063:04D5 (see the original
-// port's x86/divfault.c).
+// asm_divfault runs the divide fault handler the renderer installed (its offset in seg004
+// is the word at seg063:04D5) as the CPU would: flags, CS and IP on the stack, then the
+// handler's own translated code. A handler either resumes after the divide (it moves the
+// saved IP past the instruction and IRETs: the faulting code carries on, with the handler's
+// AX and DX) or drops the frame and carries on in the procedure itself (run hands that jump
+// back, and the faulting code passes it up).
 func asm_divfault(seg, ip uint16, length uint32) uint32 {
 	h := rw(Seg063, 0x4D5)
-	switch h {
-	case 0x5BD1: // overflow_handler_reg: +2, AX 7FFFh, DX 0, counted
-		if length != 2 {
-			break
-		}
-		ww(CODE004, 0x5BCD, BP)
-		AX = 0x7FFF
-		DX = 0
-		ww(CODE004, 0x5BCF, rw(CODE004, 0x5BCF)+1)
-		return 0
-	case 0x5BEE: // overflow_handler_mem: +4
-		if length != 4 {
-			break
-		}
-		ww(CODE004, 0x5BCD, BP)
-		AX = 0x7FFF
-		DX = 0
-		return 0
-	case 0x5C04: // overflow_handler_special_bp: +2, +-7FFFh by DX xor BP
-		if length != 2 {
-			break
-		}
-		ww(CODE004, 0x5BCD, BP)
-		if int16(DX^BP) < 0 {
-			AX = 0x8001
-		} else {
-			AX = 0x7FFF
-		}
-		DX = 0
-		return 0
-	default:
-		push16(asm_flags())
-		push16(seg + LoadSeg)
-		push16(ip)
-		return ASM_JMP(0x06E7, h)
+	push16(asm_flags())
+	push16(seg + LoadSeg)
+	push16(ip)
+	frame := SP
+	if c := run(ASM_JMP(0x06E7, h), frame, 6); c != 0 {
+		return c
 	}
-	asm_halt_at(seg, ip, fmt.Sprintf("divide fault with handler %04X (instruction of %d bytes)", h, length))
+	if resume := rw(pSS, frame); resume != ip+uint16(length) {
+		asm_halt_at(seg, ip, fmt.Sprintf("divide fault handler %04X resumed at %04X, not after the divide", h, resume))
+	}
 	return 0
 }
 
