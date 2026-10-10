@@ -23,6 +23,8 @@ UW.EXE, as underworld-exhumed has it.
 - You can look three times as far up and down, and the squares beside and behind you are drawn too. Creatures and objects keep their size when the view pitches.
 - Mouse look: `` ` `` turns it on and off (on ISO keyboards also the extra key beside the left `Shift`, which on a Mac is the key left of `1`, `^` on a German one). While it is on, the mouse turns the view and the cursor stays in the middle as a crosshair. `` Alt+` `` cycles through the axis inversions. `UW1GO_LOOK_SPEED` sets its speed in percent (10 to 400, default 100).
 - Sliding along a wall no longer turns the view, and the right-hand panel slides twice as fast.
+- The mouse acts and the keys walk. A left click in the view does what the thing clicked allows: it talks to a creature, takes an item, uses a door, lever, button, chest, the shrine or a fountain, and looks at anything else, or at what is out of reach. A right click looks. While something is carried, a left click in the view drops or throws it. The icons on the left still force one action.
+- `F5` draws the weapon or puts it away. While it is drawn the left button slashes, the right thrusts and `Space` bashes; hold one to charge the blow and let go to strike.
 - `F1`, `?` or `Ctrl+H` shows a help screen with the controls and every key (three pages: `Space` or a click turns on, `Esc` or the CLOSE scroll returns). `Esc` opens the options panel, which `F1` did in DOS.
 - The keys are UltimaHacks':
 
@@ -34,8 +36,8 @@ UW.EXE, as underworld-exhumed has it.
 | `Ctrl` + grey arrows | step forward, back, left, right |
 | left `Shift` / `Ctrl` | fly up / down (while flying); a lone left `Shift` jumps when let go, with `Ctrl` a standing long jump |
 | `1` `3` / grey `↑` `↓`, keypad `5` | look up, down, straight ahead |
-| `Space` | attack with the last attack type; `.` `;` `P` pick bash, slash, thrust |
-| `Q` / `E` | look at / use what is under the cursor |
+| `Space` | bash (hold to charge); `.` `;` `P` thrust, slash, bash |
+| `Q` / `E` | look at / act on what is under the cursor, as a right / left click |
 | `R` / `F` | the rune bag / statistics panel (again: back to the inventory) |
 | `C` `V` `B` | close the open container, scroll the inventory down, up |
 | `G` / `H` | game info / both flasks |

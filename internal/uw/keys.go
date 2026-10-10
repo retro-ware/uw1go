@@ -6,15 +6,14 @@ package uw
 // handler, so the game decides everything as it does for the click. Bound in initPlayer and
 // AutoMap.
 
-var lastAttack = 6 // slash, until . ; or p choose another
-
-// keyAttack: Space (type 0) attacks with the last attack type; . ; p (3, 6, 9) also choose it.
+// keyAttack: Space (type 0) bashes, as the mouse buttons slash and thrust; . ; p (3, 6, 9)
+// thrust, slash and bash. Each blow is charged while its key is held.
 func keyAttack(typ int) {
-	if typ != 0 {
-		lastAttack = typ
+	if pQatt == 0 {
+		attackButton = 0
 	}
 	if typ == 0 {
-		playerAttack(lastAttack)
+		playerAttack(swingBash)
 		attackKey = 0x39 // Space's scan code, held to charge, as UltimaHacks
 		return
 	}
@@ -50,9 +49,9 @@ func keyBag(how int) {
 	}
 }
 
-// keyInteract: q looks (0), e uses (1) at the pointer, as a click there in look or use would
-// (UltimaHacks' interactAtCursor): only in the 3D view, and no use while carrying something
-// or aiming.
+// keyInteract: q looks (0), e acts (1) at the pointer, as a right or a left click there
+// would (after UltimaHacks' interactAtCursor): only in the 3D view, and no act while
+// carrying something or aiming.
 func keyInteract(use int) {
 	if GameInputMode != 0 && use != 0 {
 		return
@@ -71,10 +70,8 @@ func keyInteract(use int) {
 		}
 	case use == 0:
 		player3dlook()
-	case IsMobElem(newPlObj) && newPlObj.Major() == 1 || newPlObj.Item() == 0x1CD:
-		player3dtalk() // a character (or item 0x1CD): talk, as UltimaHacks
-	default:
-		player3duse()
+	default: // what a left click does with no icon selected
+		actOn(contextAction())
 	}
 }
 
