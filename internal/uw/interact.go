@@ -14,9 +14,6 @@ import (
 type ActorFn func(obj *Object, a, b int)
 
 var (
-	iconX = [6]int{8, 8, 6, 6, 7, 8}
-	iconY = [6]int{0x64, 0x77, 0x86, 0x98, 0xAC, 0xBD}
-
 	TimeStop, Hasted, WizEye, Blessed bool
 	PickDist                          = 0x90
 	defMode                           bool
@@ -31,7 +28,6 @@ var (
 	inforMshandle    int
 	ObjectActorArg   int
 	actspMshandle    int
-	iconsMshandle    int
 	PickMap          *Tile
 	newPlObj         *Object
 	flaskMshandle    int
@@ -39,15 +35,6 @@ var (
 	releasePtr       *Link
 	GameInputMode    int
 )
-
-// pullChain flips the right-hand panel between the inventory and the statistics.
-func pullChain(int) {
-	if RightPanel == PANEL_INV {
-		setScreenFrame(SCR_PANEL, PANEL_STATS)
-	} else if RightPanel != PANEL_TURNING {
-		setScreenFrame(SCR_PANEL, PANEL_INV)
-	}
-}
 
 // printInfo: a click on the compass prints hunger, fatigue, level, day and time of day.
 func printInfo() {
@@ -69,20 +56,12 @@ func printInfo() {
 	mouseRelease(true)
 }
 
-// flaskInfo: a click on the flasks pulls the chain or prints vitality or mana.
+// flaskInfo: a click on the flasks prints vitality or mana.
 func flaskInfo() {
-	if inplist.x > 0x19 && inplist.x < 0x28 {
-		if inplist.y > 0xD {
-			pullChain(0)
-		}
-		return
-	}
-	if inplist.y > 0x1E {
-		return
-	}
-	msg := getString((b2i(inplist.x > 0x1E) + 0x59) | STR_GAME)
+	mana := inplist.x >= flX[1]-flX[0]
+	msg := getString((b2i(mana) + 0x59) | STR_GAME)
 	var cur, max string
-	if inplist.x < 0x1E {
+	if !mana {
 		cur = strconv.Itoa(int(ThePlayer.HP))
 		max = strconv.Itoa(int(playerdat.Avghit))
 		if p := player.Poison(); p != 0 {
@@ -96,18 +75,17 @@ func flaskInfo() {
 	mouseRelease(true)
 }
 
-// startGameinp registers the game screen's five click areas.
+// startGameinp registers the game screen's click areas over the view: the rune shelf,
+// the active spells, the compass and the flasks.
 func startGameinp() {
 	LeftPanel = 0
-	iconsMshandle = inputAddmouse(8, 0x54, 0x20, 0xCE, -1, MODE_GAME, ih(dealWithIcons))
-	spellMshandle = inputAddmouse(0xB0, 0x2D, 0xDE, 0x3D, 0, MODE_GAME, ih(tryCast))
-	actspMshandle = inputAddmouse(0x34, 0x2F, 0x66, 0x3F, 0, MODE_GAME, ih(tryClear))
-	inforMshandle = inputAddmouse(0x7A, 0x31, 0x98, 0x40, 0, MODE_GAME, func(any) { printInfo() })
-	flaskMshandle = inputAddmouse(0xF4, 0x2C, 0x135, 0x50, 0, MODE_GAME, func(any) { flaskInfo() })
+	spellMshandle = inputAddmouse(runeX[0], runeY-0x10, runeX[2]+0x0F, runeY, 0, MODE_GAME, ih(tryCast))
+	actspMshandle = inputAddmouse(spellX[2], spellY-0x10, spellX[0]+0x0F, spellY, 0, MODE_GAME, ih(tryClear))
+	inforMshandle = inputAddmouse(compassX+0x0A, compassY-0x13, compassX+0x28, compassY-4, 0, MODE_GAME, func(any) { printInfo() })
+	flaskMshandle = inputAddmouse(flX[0], flaskY-0x20, flX[1]+0x17, flaskY, 0, MODE_GAME, func(any) { flaskInfo() })
 }
 
 func clearGameinp() {
-	inputDel(iconsMshandle)
 	inputDel(spellMshandle)
 	inputDel(actspMshandle)
 	inputDel(flaskMshandle)
@@ -120,11 +98,7 @@ func initGamedisp() {
 	initScroll()
 	playMusic()
 	startGameinp()
-	if LeftPanel == 0 {
-		if RightButtonThing != IMODE_DEFAULT {
-			newIconSelect(RightButtonThing)
-		}
-	} else {
+	if LeftPanel != 0 {
 		runOptionsPanel(1)
 	}
 	displayScr()
@@ -659,36 +633,12 @@ func mousInPanel(any) {
 	}
 }
 
-// newIconSelect draws interaction icon mode (1 to 5) selected.
-func newIconSelect(mode int) {
-	mode--
-	mouseHide()
-	picToScreen(ICON_LFTI+0xB-mode*2, iconX[mode], iconY[mode])
-	mouseShow()
-}
-
-func newIconUnselect(mode int) {
-	mode--
-	mouseHide()
-	picToScreen(ICON_LFTI+0xA-mode*2, iconX[mode], iconY[mode])
-	mouseShow()
-}
-
 func iconCursor(m int) bool { return m == IMODE_USE || m == IMODE_LOOK || m == IMODE_GET }
 
-// dealWithIcons handles a click on an interaction icon (-1: find which from the pointer).
+// dealWithIcons does what an interaction icon did (the icons are gone with the frame;
+// their keys are left): 1 fight, 5 the options.
 func dealWithIcons(mode int) {
 	if GameInputMode != GIM_NONE {
-		return
-	}
-	if mode == -1 {
-		if LeftPanel != 0 {
-			optionsMouseClick(inplist.x, inplist.y)
-		} else if mode = (inplist.y + 2) / 0x12; mode > 5 {
-			return
-		}
-	}
-	if mode == -1 {
 		return
 	}
 	if mode == 5 {
@@ -704,26 +654,19 @@ func dealWithIcons(mode int) {
 		unforceMouseCursor(3)
 	}
 	if mode++; mode == RightButtonThing {
-		newIconUnselect(RightButtonThing)
 		RightButtonThing = IMODE_DEFAULT
 	} else {
-		if RightButtonThing != IMODE_DEFAULT {
-			newIconUnselect(RightButtonThing)
-		}
 		RightButtonThing = mode
 		if RightButtonThing == IMODE_FIGHT {
 			if player.MotionState&1 == 0 {
 				player.SetDrawn(1)
 				setScreenFrame(SCR_WEAPON, WEAP_READY)
-				newIconSelect(RightButtonThing)
 				if m := getCurrentMusic(); m < MUSIC_FOE_HURT || m > MUSIC_DANGER {
 					setNewMusic(MUSIC_ARMED)
 				}
 			} else {
 				RightButtonThing = IMODE_DEFAULT
 			}
-		} else {
-			newIconSelect(RightButtonThing)
 		}
 	}
 	if player.Drawn() == 0 && getCurrentMusic() == MUSIC_ARMED {
@@ -743,13 +686,9 @@ func pickFightmode() {
 	if iconCursor(RightButtonThing) {
 		unforceMouseCursor(3)
 	}
-	if RightButtonThing != IMODE_DEFAULT {
-		newIconUnselect(RightButtonThing)
-	}
 	RightButtonThing = IMODE_FIGHT
 	player.SetDrawn(1)
 	setScreenFrame(SCR_WEAPON, WEAP_READY)
-	newIconSelect(RightButtonThing)
 	if m := getCurrentMusic(); m < MUSIC_FOE_HURT || m > MUSIC_DANGER {
 		setNewMusic(MUSIC_ARMED)
 	}
@@ -760,9 +699,6 @@ func puntFightmode() {
 	if player.Drawn() != 0 {
 		setScreenFrame(SCR_WEAPON, WEAP_SHEATHED)
 		player.SetDrawn(0)
-		if LeftPanel == 0 {
-			newIconUnselect(IMODE_FIGHT)
-		}
 		RightButtonThing = IMODE_DEFAULT
 		clearFightState()
 		setRandomWalkingMusic()

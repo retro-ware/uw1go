@@ -78,8 +78,8 @@ var helpPages = []helpPage{
 	}}},
 	{title: "Keys: Magic, Panels, Game", keyW: []int{52, 40}, cols: [][]helpRow{{
 		{"#", "Magic and panels"},
-		{"R", "rune bag"},
-		{"K", "statistics"},
+		{"I  R  K", "pack, runes, stats"},
+		{"", "again: mouse look"},
 		{"B  N", "scroll inventory"},
 		{"G", "hunger, time of day"},
 		{"H", "health and mana"},

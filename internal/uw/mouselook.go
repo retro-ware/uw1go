@@ -45,6 +45,7 @@ func mouseLookSet(on bool) {
 		checkMouse()
 		drawMouse()
 	}
+	showPanel(!on) // the right-hand panel shows while mouse look is off
 }
 
 // lookCentre puts the crosshair in the view's centre (m3dy is its bottom edge), again when

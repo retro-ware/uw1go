@@ -64,11 +64,8 @@ func setGraphicsLevel() {
 	lighton = 1
 }
 
-// processGrid draws a normal frame.
-func processGrid() { processGridWith(subprocess) }
-
 // processGridWith begins a frame from the current camera and has walk draw the squares
-// (wide-pitch's two passes, viewPasses, walk the grid twice).
+// (viewPasses: one or two passes).
 func processGridWith(walk func()) {
 	oldlight := lighton
 	AnimObjInPipe = 0

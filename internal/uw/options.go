@@ -61,6 +61,7 @@ func runOptionsPanel(show int) {
 	LeftPanel = 1
 	if show != 0 {
 		mouseHide()
+		gr.SetLayer(4, 0xBD, 0x23, 0x6C, gr.LayerPage) // over the view
 		gr.GrSoftPageFlip()
 		setOptionsPage(6)
 		gr.GrSoftPageFlip()
@@ -115,16 +116,14 @@ func hilite(row, pic int) {
 	hiliteRow = row
 }
 
-// closeOptionPanel restores the left panel's picture and the right button's icon.
+// closeOptionPanel gives the panel's place back to the view.
 func closeOptionPanel() {
 	mouseHide()
 	LeftPanel = 0
 	optionsPage = 7
-	reloadGrVpic(ICON_OPTB, "optbtns", 0)
-	picToScreen(ICON_OPTB, 4, 0xBD)
-	if RightButtonThing > IMODE_DEFAULT {
-		newIconSelect(RightButtonThing)
-	}
+	gr.SetLayer(4, 0xBD, 0x23, 0x6C, gr.LayerFrame) // the view again
+	gr.RefreshRect(4, 0xBD, 0x23, 0x6C)
+	editchng(2)
 	gameoptsDone = true
 	mouseShow()
 }

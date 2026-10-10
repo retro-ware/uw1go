@@ -68,6 +68,7 @@ func initPlayer() {
 	inputAddkey(KEY_ALT|'v', 0, 0x11, func(any) { mouseLookOrient() })
 	// UltimaHacks' keys (keys.go), its input-mode masks
 	inputAddkey(' ', 0, 1, func(any) { keySpace() })
+	inputAddkey('i', 0, 1, ih(keyPanel))
 	inputAddkey('r', 1, 1, ih(keyPanel))
 	inputAddkey('k', 2, 1, ih(keyPanel))
 	inputAddkey('q', 0, 1, ih(keyInteract))

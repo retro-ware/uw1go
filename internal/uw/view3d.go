@@ -7,8 +7,8 @@ import (
 )
 
 // Port of VIEW3D.C: setting up and drawing a frame of the 3D view. setupVars turns the
-// camera into the first quadrant, do2dclip builds the vision grid and has GRIDDB.C's
-// processGrid draw the frame with the renderer (internal/render), and sendDb copies its
+// camera into the first quadrant, viewPasses builds the vision grid and has GRIDDB.C's
+// processGridWith draw the frame with the renderer (internal/render), and sendDb copies its
 // frame buffer to gr.FB and the screen.
 
 // gvec is an edge of the vision arc walking the grid. mapi is a tile index (it may leave
@@ -172,24 +172,14 @@ func do3dGrab() {
 
 // renderFB draws a frame into the frame buffer only.
 func renderFB() {
-	if steepView() {
-		viewPasses()
-	} else {
-		setupVars()
-		do2dclip()
-	}
+	viewPasses()
 	runRender()
 }
 
 // establishView draws a frame and shows it.
 func establishView() {
 	strtime = GameTime()
-	if steepView() {
-		viewPasses()
-	} else {
-		setupVars()
-		do2dclip()
-	}
+	viewPasses()
 	sendDb()
 }
 
@@ -593,38 +583,26 @@ func buildGrid() {
 	}
 }
 
-// do2dclip builds the vision grid and the frame's database.
-func do2dclip() {
-	initGrid()
-	buildGrid()
-	mousQUp(false)
-	processGrid()
-}
-
 // camera is struct Camera (view3d.h): where the view is drawn from.
 type camera struct{ x, y, z, heading, pitch, bank int16 }
 
 // cPlayer is the camera of the current frame, the eye turned into the first quadrant.
 var cPlayer camera
 
-// wide-pitch's view beyond the original's pitch (UltimaHacks' setupPerspectiveAndEnqueueDraw,
-// as underworld-exhumed's VIEW3D.C has it): the original's grid reaches 45 degrees either side
-// of the heading and no further back than the eye's row, which at a steep pitch leaves the
-// bottom (or top) of the view empty. Two passes draw into the one frame, begun from the
-// camera looking ahead: first the squares behind the player, the grid built with the heading
-// turned half round and cut to a small diamond, without their objects, each point turned
-// back into the forward frame (gridPoint); then the view ahead, its edge rays opened to a
-// right angle either side and the squares beyond 45 degrees of the heading dropped unless
-// within five squares.
+// The view fills the screen's width, which the original's vision grid does not: it reaches
+// 45 degrees either side of the heading (and the squares beside the player) and no further
+// back than the eye's row. The frame is drawn in up to two passes (after UltimaHacks'
+// setupPerspectiveAndEnqueueDraw, as underworld-exhumed's VIEW3D.C has it), begun from
+// the camera looking ahead: at a pitch beyond the original's first the squares behind the
+// player, the grid built with the heading turned half round and cut to a small diamond,
+// without their objects, each point turned back into the forward frame (gridPoint); then the
+// view ahead, its edge rays opened to a right angle either side and the squares beyond the
+// view's half width dropped unless within five squares.
 var drawingBehind bool // the back pass is drawing
 
-// steepView: the view pitches at all. Even within the original's pitch
-// its grid's 45 degrees leave the bottom corners of a view pitched down (the top of one
-// pitched up) empty where the squares beside the player show, so any pitch takes the opened
-// view ahead; only one beyond the original's needs the squares behind as well.
-func steepView() bool {
-	return PlayerPitch != 0
-}
+// viewHalfAngle is the view's half width: the full-width view at the game's zoom shows
+// 59 degrees either side of the heading (x/z up to 1.67), and a little more is kept.
+const viewHalfAngle = 0x2B00
 
 func viewPasses() {
 	setupVars() // the frame's camera looks ahead
@@ -676,9 +654,10 @@ func cullRearward() {
 	}
 }
 
-// cullForward drops the squares outside 45 degrees of the heading, unless |column| + row <= 5.
+// cullForward drops the squares outside the view's half width of the heading, unless
+// |column| + row <= 5.
 func cullForward() {
-	la, ra := cPlayer.heading-0x2000, cPlayer.heading+0x2000
+	la, ra := cPlayer.heading-viewHalfAngle, cPlayer.heading+viewHalfAngle
 	ls, lc := cSinCos(int(uint16(la)))
 	rs, rc := cSinCos(int(uint16(ra)))
 	for row := 0; row < 17; row++ {

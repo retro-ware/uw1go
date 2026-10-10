@@ -646,11 +646,11 @@ restart:
 	return true
 }
 
-// runcutscene plays cutscene n: below 100h full screen, from 100h in the 3D view's window.
+// runcutscene plays cutscene n: below 100h full screen, from 100h in a window in the view.
 func runcutscene(n int) {
 	x, y, w, h := 0, 0xC7, 0x140, 0xC8
-	if n >= 0x100 {
-		x, y, w, h = 0x34, 0xB4, 0xAC, 0x70
+	if n >= 0x100 { // the original's window, in the middle of the view
+		x, y, w, h = (0x140-0xAC)/2, 0xC7-(viewH-0x70)/2, 0xAC, 0x70
 	}
 	if n == 1 || n == 2 || n == 3 {
 		loadNewMusic(4, true)

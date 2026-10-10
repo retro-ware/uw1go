@@ -584,11 +584,7 @@ func mousReSave() {
 
 func mousReSave3d() {
 	switch {
-	case m3dt == 2:
-		gr.FbufSetcolor(0x100)
-		gr.Rectangle(mouseX-hotspotX-m3dx, mouseY+hotspotY-m3dy+m3dh,
-			mouseX+cursW-hotspotX-m3dx-1, mouseY-curH+hotspotY-m3dy+m3dh)
-	case m3dt == 1 && inplist.mode == MODE_GAME:
+	case m3dt == 2 || m3dt == 1 && inplist.mode == MODE_GAME:
 		gr.ShowClip = true
 		gr.PenBlock.CopyFB(mouseX-hotspotX-m3dx, mouseY+hotspotY-m3dy+m3dh, cursW, curH+1)
 		gr.ShowClip = false
@@ -613,6 +609,9 @@ func draw3dMouse() {
 	gr.ShowClip, gr.Transparency = true, true
 	picToFbuf(mCursorPic, x, y)
 	gr.ShowClip, gr.Transparency = false, false
+	if pix, w, h := iconPix(mCursorPic); pix != nil {
+		gr.SetFBCursor(pix, x, y, w, h)
+	}
 }
 
 func warpMouse(x, y int) {

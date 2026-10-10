@@ -22,6 +22,7 @@ type mouseDispatch struct {
 	arg      any
 	mask     int
 	fn       Handler
+	off      bool // inputEnable turned it off
 }
 
 type keyDispatch struct {
@@ -68,6 +69,15 @@ func inputAddkey(key int, arg any, mask int, fn Handler) int {
 	return kcurhndl + 1
 }
 
+// inputEnable turns a mouse entry on or off.
+func inputEnable(hndl int, on bool) {
+	for i := range mousDisp {
+		if mousDisp[i].hndl == hndl {
+			mousDisp[i].off = !on
+		}
+	}
+}
+
 // inputDel removes an entry; the last entry moves into its place.
 func inputDel(hndl int) {
 	if hndl == 0 {
@@ -103,14 +113,20 @@ func inputDispatch(in *Inplist) {
 		x, y := mouseQgetxy()
 		in.cmd = code
 		in.mouse = true
-		for i := len(mousDisp) - 1; i >= 0; i-- {
-			m := &mousDisp[i]
-			if m.ulx <= x && m.uly <= y && m.lrx >= x && m.lry >= y && m.mask&in.mode != 0 && m.fn != nil {
-				in.x = x - m.ulx
-				in.y = y - m.uly
-				fn, arg := m.fn, m.arg
-				fn(arg)
-				return
+		// the newest entry first, the 3D view's last: the furniture lies over it
+		for pass := 0; pass < 2; pass++ {
+			for i := len(mousDisp) - 1; i >= 0; i-- {
+				m := &mousDisp[i]
+				if (m.hndl == PMsHndle) != (pass == 1) || m.off {
+					continue
+				}
+				if m.ulx <= x && m.uly <= y && m.lrx >= x && m.lry >= y && m.mask&in.mode != 0 && m.fn != nil {
+					in.x = x - m.ulx
+					in.y = y - m.uly
+					fn, arg := m.fn, m.arg
+					fn(arg)
+					return
+				}
 			}
 		}
 		return

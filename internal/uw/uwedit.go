@@ -171,7 +171,7 @@ func strtDemscr() {
 	var pal [0x300]byte
 	mouseHide()
 	demousPlayer()
-	place3dView(0x34, 0xB4, 0xAC, 0x71)
+	place3dView(0, 0xC7, 0x140, viewH) // the whole width, down to the message scroll
 	copy(pal[:], gr.Palette[:])
 	fadeout(pal[:], 2)
 	if !loadBitMap(-1, "DATA\\main.byt") {
@@ -188,6 +188,7 @@ func strtDemscr() {
 }
 
 func freeDemscr() {
+	hudStop()
 	demousPlayer()
 	clearGamedisp()
 	holdScrgr()

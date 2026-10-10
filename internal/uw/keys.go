@@ -22,19 +22,10 @@ func keySpace() {
 
 // keyFlasks: h, as a click on the left flask, then on the right.
 func keyFlasks() {
-	inplist.x, inplist.y = 20, 11
+	inplist.x, inplist.y = 0, 11
 	flaskInfo()
-	inplist.x, inplist.y = 60, 11
+	inplist.x = flX[1] - flX[0]
 	flaskInfo()
-}
-
-// keyPanel: r, k, to the rune bag (1) or the statistics (2), or back to the inventory when
-// it is showing (UltimaHacks' flipToPanel).
-func keyPanel(panel int) {
-	if RightPanel == panel {
-		panel = 0
-	}
-	setScreenFrame(SCR_PANEL, panel)
 }
 
 // keyBag: n, b scroll the inventory down (1), up.

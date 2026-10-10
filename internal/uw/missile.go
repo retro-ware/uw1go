@@ -19,12 +19,15 @@ var (
 // enough that a drop is a throw.
 func playerSettr() bool {
 	x, y := mouseGetxy()
-	if x -= 0x34; x > 0xAC {
+	// the pointer's place in the view, scaled to the original's 172 by 113 window
+	x = (x - m3dx) * 0xAC / max(m3dw, 1)
+	y = (y - (m3dy - m3dh)) * 0x71 / max(m3dh, 1)
+	if x > 0xAC {
 		x = 0xAC
 	} else if x < 0 {
 		x = 0
 	}
-	if y -= 0x43; y > 0x71 {
+	if y > 0x71 {
 		y = 0x71
 	} else if y < 0 {
 		y = 0
