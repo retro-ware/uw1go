@@ -48,7 +48,10 @@ var keyScan = map[ebiten.Key]scan{
 	ebiten.KeyNumpadDecimal: {0x53, false}, ebiten.KeyF11: {0x57, false}, ebiten.KeyF12: {0x58, false},
 	ebiten.KeyNumpadEnter: {0x1C, true}, ebiten.KeyControlRight: {0x1D, true}, ebiten.KeyNumpadDivide: {0x35, true},
 	ebiten.KeyAltRight: {0x38, true},
-	ebiten.KeyHome:     {0x47, true}, ebiten.KeyArrowUp: {0x48, true}, ebiten.KeyPageUp: {0x49, true},
+	// ISO keyboards' extra key (beside the left Shift; on a Mac the one left of 1, ^ on a German
+	// board) is ` too, the mouse-look key, which non-US layouts have elsewhere or not at all
+	ebiten.KeyIntlBackslash: {0x29, false},
+	ebiten.KeyHome:          {0x47, true}, ebiten.KeyArrowUp: {0x48, true}, ebiten.KeyPageUp: {0x49, true},
 	ebiten.KeyArrowLeft: {0x4B, true}, ebiten.KeyArrowRight: {0x4D, true}, ebiten.KeyEnd: {0x4F, true},
 	ebiten.KeyArrowDown: {0x50, true}, ebiten.KeyPageDown: {0x51, true}, ebiten.KeyInsert: {0x52, true},
 	ebiten.KeyDelete: {0x53, true},

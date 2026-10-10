@@ -65,8 +65,9 @@ var helpPages = []helpPage{
 		{"1  3", "look up, down"},
 		{"grey ^ v", "look up, down"},
 		{"2  pad 5", "look ahead"},
-		{"Backtick", "mouse look on, off"},
-		{"Alt+Backtick", "mouse look axes"},
+		{"`  ^", "mouse look on, off"},
+		{"", "(the key left of 1)"},
+		{"Alt+`  Alt+^", "mouse look axes"},
 	}, {
 		{"#", "Acting"},
 		{"Space", "attack (hold)"},
