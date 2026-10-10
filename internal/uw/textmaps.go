@@ -101,7 +101,6 @@ func loadTxtmaps() {
 	loadTrEms("w64")
 	loadTrEms("w16")
 	loadDoors()
-	texToR3d()
 }
 
 // loadTrMem reads textures ids[0..*count-1] of the .tr file name into dst; it stops at a

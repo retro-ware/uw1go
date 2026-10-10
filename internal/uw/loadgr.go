@@ -4,7 +4,6 @@ import (
 	"io"
 
 	"github.com/memmaker/uw1go/internal/gr"
-	"github.com/memmaker/uw1go/internal/r3d"
 )
 
 // Port of LOADGR.C: art loading, .GR picture files into graphics slots and .TR textures.
@@ -161,9 +160,6 @@ func gronkGr(art string, start, count int, move func(img []byte, size, index int
 			return false
 		}
 		size := f.size(n)
-		if grAdrHook != nil {
-			grAdrHook(size)
-		}
 		img, got := f.ldGr(n)
 		if got != size {
 			ok = false
@@ -180,7 +176,6 @@ var lastGrCount int
 
 func movenewEms(img []byte, size, index int) bool {
 	setSlot(index+grIndex, img, 0)
-	emsPut(index+grIndex, img, size)
 	return true
 }
 
@@ -188,12 +183,9 @@ func moveObjEms(base int) func([]byte, int, int) bool {
 	return func(img []byte, size, index int) bool {
 		if size == 0 {
 			objTab[(base+index)*2] = 0
-			setObjTab(base+index, 0)
 		} else {
 			objTab[(base+index)*2] = uint16(grIndex)
-			setObjTab(base+index, grIndex)
 			setSlot(grIndex, img, 0)
-			emsPut(grIndex, img, size)
 			grIndex++
 		}
 		return true
@@ -235,22 +227,16 @@ func copyToVram(img []byte, hd int) {
 }
 
 func loadGrEms(art string) bool {
-	grAdrHook = emsAdrNew
-	defer func() { grAdrHook = nil }()
 	ok := gronkGr(art, 0, -1, movenewEms)
 	grIndex += lastGrCount
 	return ok
 }
 
 func loadObjEms(art string) bool {
-	grAdrHook = emsAdrNew
-	defer func() { grAdrHook = nil }()
 	return gronkGr(art, 0, -1, moveObjEms(0))
 }
 
 func reloadObjEms(art string, base, count int) bool {
-	grAdrHook = emsAdrNew
-	defer func() { grAdrHook = nil }()
 	reloadBase = base
 	return gronkGr(art, 0, count, moveObjEms(base))
 }
@@ -330,8 +316,6 @@ func loadAllGr() int {
 	firstObj = grIndex
 	ok = loadObjEms("objects") && ok
 	firstAnim = grIndex
-	r3dInit()
-	r3d.W16(r3d.Seg051+0xB0F0, uint16(firstAnim))
 	ok = loadGrEms("animo") && ok
 	firstButton = grIndex
 	ok = loadGrEms("buttons") && ok
@@ -361,54 +345,8 @@ func loadDoors() {
 		slot := grIndex
 		gronkGr("doors", int(ActDoors[i]), 1, func(img []byte, size, index int) bool {
 			setSlot(slot, img, 0)
-			emsReload(slot, img)
 			return true
 		})
 	}
 	grIndex = old
-	seg042_19B()
-}
-
-// The EMS side of the loaders, which the renderer reads: pictures packed paragraph
-// aligned into 16 KB logical pages from page 4 on, a slot's grs_off word (seg051:B10F)
-// holding the page in its top four bits and the paragraph in the low twelve, and
-// obj_tab (seg051:B90F, two words an object) the slot of each object's picture.
-
-var (
-	emsOff    int
-	emsPage   = 4
-	grAdrHook func(size int)
-)
-
-const (
-	grsOffTab = 0xB10F
-	objTabTab = 0xB90F
-)
-
-// emsAdrNew is adrnew_ems: the next picture starts a new page if it does not fit.
-func emsAdrNew(size int) {
-	if emsOff<<4+size > 0x4000 {
-		emsOff = 0
-		emsPage++
-	}
-}
-
-// emsPut stores a picture at the next EMS place and records it in slot.
-func emsPut(slot int, img []byte, size int) {
-	r3dInit()
-	r3d.EMSWrite(emsPage, emsOff<<4, img)
-	r3d.W16(r3d.Seg051+grsOffTab+2*slot, uint16(emsPage<<12+emsOff))
-	emsOff += (size + 15) >> 4
-}
-
-// emsReload is adrold_ems: a picture into the place its slot already names.
-func emsReload(slot int, img []byte) {
-	r3dInit()
-	a := int(r3d.R16(r3d.Seg051 + grsOffTab + 2*slot))
-	r3d.EMSWrite(a>>12, (a&0xFFF)<<4, img)
-}
-
-func setObjTab(i, slot int) {
-	r3dInit()
-	r3d.W16(r3d.Seg051+objTabTab+4*i, uint16(slot))
 }

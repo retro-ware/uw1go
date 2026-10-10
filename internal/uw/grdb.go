@@ -1,10 +1,8 @@
 package uw
 
-import "github.com/memmaker/uw1go/internal/r3d"
-
 // Port of GRDB.C: the label table of the 3D view's render database, and SETPNT.ASM. The
 // database is the word bytecode VIEW3D.C, GRIDDB.C and DRAWOBJ.C write into the buffer at
-// cDbase (seg051:2938, in the renderer's memory) and cRender runs. dbptr is the byte
+// cDbase (seg051:2938, in the renderer's data segment) and the renderer runs. dbptr is the byte
 // offset in seg051 of the next word.
 
 const (
@@ -26,18 +24,16 @@ var (
 	ptnuminq  int
 )
 
-func dbAddr(off int) int { return r3d.Seg051 + off }
-
 // dbw writes word v at dbptr and moves on (*dbptr++ = v).
 func dbw(v int) {
-	r3d.W16(dbAddr(dbptr), uint16(v))
+	rmemW16(dbptr, v)
 	dbptr += 2
 }
 
 // dbWord is the word at word index i of cDbase.
-func dbWord(i int) int16 { return int16(r3d.R16(dbAddr(cDbase + 2*i))) }
+func dbWord(i int) int16 { return int16(rmemR16(cDbase + 2*i)) }
 
-func dbSetWord(i int, v int) { r3d.W16(dbAddr(cDbase+2*i), uint16(v)) }
+func dbSetWord(i int, v int) { rmemW16(cDbase+2*i, v) }
 
 // dbIndex is dbptr - cDbase in words.
 func dbIndex() int { return (dbptr - cDbase) >> 1 }
@@ -68,7 +64,7 @@ func grdbBlank() {
 // Clk is the offset of word n of the table 0x18 bytes before the database.
 func Clk(n int) int { return cDbase - 0x18 + 2*n }
 
-func grEntry()  { r3d.W16(dbAddr(cDbbase), uint16(dbptr)) }
+func grEntry()  { rmemW16(cDbbase, dbptr) }
 func grTostrt() { dbptr = cEntryStrt }
 
 // Ref emits the jump word for label lab.

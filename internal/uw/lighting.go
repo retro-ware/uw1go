@@ -3,13 +3,11 @@ package uw
 import (
 	"os"
 	"strconv"
-
-	"github.com/memmaker/uw1go/internal/r3d"
 )
 
 // Port of LIGHTING.C: the light level of the 3D view. lightabs (expand.go) holds the 16
 // shading maps from DATA\LIGHT.DAT (MONO.DAT's grey ones at level 5); set_light reads a
-// level's row of DATA\SHADES.DAT. The renderer gets copies of the tables (r3d).
+// level's row of DATA\SHADES.DAT. The renderer gets copies of the tables.
 
 var curLightLevel = 0xFF
 
@@ -19,8 +17,8 @@ var smoothDiv, smoothBase, smoothLowpass int16
 func loadLightTabs(name string) {
 	if b := readFile(name); b != nil {
 		copy(lightabs[:], b)
-		r3dInit()
-		r3d.SetLightTabs(lightabs[:])
+		initRenderer()
+		rend.SetLightTabs(lightabs[:])
 	}
 }
 
@@ -52,8 +50,8 @@ func setLight(n int) {
 	curvrad = int(row(3))
 	distpoly = int(row(4))
 	dist8 = int(row(5))
-	r3dInit()
-	r3d.SetSmooth(smoothDiv, smoothBase, smoothLowpass)
+	initRenderer()
+	rend.SetSmooth(int(smoothDiv), int(smoothBase), int(smoothLowpass))
 	presetGrid(curvrad)
 	editchng(2)
 }
@@ -62,24 +60,24 @@ func setLight(n int) {
 func initLighting() {
 	loadLightTabs("DATA\\light.dat")
 	if b := readFile("DATA\\xfer.dat"); b != nil {
-		r3dInit()
-		r3d.SetXfer(b)
+		initRenderer()
+		rend.SetXfer(b)
 	}
 }
 
 // randomLight is the mushroom effect: the light maps replaced with 4 KB of low memory
-// (the interrupt vector table, in DOS; here whatever the renderer's memory holds there),
+// (the interrupt vector table, in DOS; here the start of UW.EXE),
 // or put back.
 func randomLight(on bool) {
 	if on {
-		r3dInit()
-		src := int(r3d.Bytes(r3d.Seg051+0x28A0, 1)[0])
-		copy(lightabs[:], r3d.Bytes(src, 0x1000))
+		initRenderer()
+		src := int(rend.Mem[0x28A0])
+		copy(lightabs[:], exeImage[src:])
 		for i := 0; i < 16; i++ {
 			lightabs[i*256] = 0
 			lightabs[i*256+1] = 0
 		}
-		r3d.SetLightTabs(lightabs[:])
+		rend.SetLightTabs(lightabs[:])
 	} else if curLightLevel != 5 {
 		loadLightTabs("DATA\\light.dat")
 	} else {

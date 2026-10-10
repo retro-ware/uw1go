@@ -8,8 +8,10 @@ works).
 
 The port follows the decompiled source of
 [underworld-exhumed](https://github.com/memmaker/underworld-exhumed)
-function by function: one Go file per C file in `internal/uw`, the 3D
-engine machine-translated into `internal/r3d` (see `tools/c2go`). It is not a
+function by function: one Go file per C file in `internal/uw`. The 3D renderer
+(`internal/render`) is rewritten natively: it runs the render database and the
+3D models from UW.EXE as the original's interpreter does, and draws with floating
+point geometry and clipping. It is not a
 faithful replica, though: it always plays as a modernized game, with the changes below.
 
 ## What is modern
@@ -19,7 +21,7 @@ Most of it is John Glassmyer's
 UW.EXE, as underworld-exhumed has it.
 
 - The game starts at the main menu, without the title sequence or the introduction (the menu still offers it), and the menu's cursor wraps around.
-- Textures are mapped perspective-correct (`internal/r3d/persp.go`, after SiENcE's uwpatch), so walls no longer bend and floors no longer swim.
+- Textures are mapped perspective-correct (the idea from SiENcE's uwpatch), so walls no longer bend and floors no longer swim.
 - You can look three times as far up and down, and the squares beside and behind you are drawn too. Creatures and objects keep their size when the view pitches.
 - Mouse look is on from the start; `` ` `` turns it off and on (on ISO keyboards also the extra key beside the left `Shift`, which on a Mac is the key left of `1`, `^` on a German one). While it is on, the mouse turns the view and the cursor stays in the middle as a crosshair. A take goes straight into the pack (onto a matching stack first), as the crosshair cannot drag; with the pack full it stays carried. `` Alt+` `` cycles through the axis inversions. `UW1GO_LOOK_SPEED` sets its speed in percent (10 to 400, default 100).
 - Movement is Quake-like: the keys held add up, so `W` with `A` or `D` goes diagonally (no faster than straight), sliding and backing up go most of running speed instead of a quarter, and speeding up and stopping take a tenth of a second at any frame rate. In a browser, a click takes the pointer back after `Esc` lets it go.
