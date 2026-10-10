@@ -40,7 +40,7 @@ UW.EXE, as underworld-exhumed has it.
 | `Q` / `E` | look at / use what is under the cursor (`E` as a right click) |
 | `R` / `K` | the rune bag / statistics panel (again: back to the inventory) |
 | `V` | mouse look on, off |
-| `B` | scroll the inventory up |
+| `B` `N` | scroll the inventory up, down |
 | `F` | cast the spell on the shelf |
 | `Tab` | draw, sheathe the weapon |
 | `G` / `H` | game info / both flasks |

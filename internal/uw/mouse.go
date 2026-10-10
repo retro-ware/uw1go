@@ -283,7 +283,7 @@ var (
 
 func keyRepeats(ch int) bool {
 	switch ch {
-	case 'b':
+	case 'b', 'n':
 		return true
 	}
 	return false

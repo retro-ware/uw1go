@@ -74,6 +74,7 @@ func initPlayer() {
 	inputAddkey('e', 1, 1, ih(keyInteract))
 	inputAddkey('m', 0, 1, func(any) { newscr(2) })
 	inputAddkey('b', 2, 1, ih(keyBag))
+	inputAddkey('n', 1, 1, ih(keyBag))
 	inputAddkey('g', 0, 1, func(any) { printInfo() })
 	inputAddkey('h', 0, 1, func(any) { keyFlasks() })
 	inputAddkey(KEY_SHIFT|keyLShift, 0, 0x11, func(any) { shiftTap() }) // run

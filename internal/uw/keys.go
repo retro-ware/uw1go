@@ -37,7 +37,7 @@ func keyPanel(panel int) {
 	setScreenFrame(SCR_PANEL, panel)
 }
 
-// keyBag scrolls the inventory down (1) or up (b).
+// keyBag: n, b scroll the inventory down (1), up.
 func keyBag(how int) {
 	if how == 1 {
 		ScrollItemsDown()

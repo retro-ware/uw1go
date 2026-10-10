@@ -80,7 +80,7 @@ var helpPages = []helpPage{
 		{"#", "Magic and panels"},
 		{"R", "rune bag"},
 		{"K", "statistics"},
-		{"B", "scroll inventory"},
+		{"B  N", "scroll inventory"},
 		{"G", "hunger, time of day"},
 		{"H", "health and mana"},
 		{"F", "cast the spell"},
