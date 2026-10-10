@@ -70,6 +70,12 @@ func initTimers() {}
 // initSounds sets up the music driver for soundCard and, when there is one, the speech
 // driver; the effects (initFx) and the timbres. Card 1 gets effects only.
 func initSounds() {
+	// goplay sets GOPLAY_MT32 to the folder of the ROMs dropped on the page's MT-32, which
+	// then is the music card
+	mt32Dir := os.Getenv("UW1GO_MT32_ROMS")
+	if d := os.Getenv("GOPLAY_MT32"); d != "" {
+		soundCard, mt32Dir = CARD_MT32, d
+	}
 	if v, err := strconv.Atoi(os.Getenv("UW1GO_SOUND")); err == nil {
 		soundCard = v
 	}
@@ -95,11 +101,10 @@ func initSounds() {
 			goto fail
 		}
 		if soundCard == CARD_MT32 {
-			dir := os.Getenv("UW1GO_MT32_ROMS")
-			if dir == "" {
-				dir = "roms"
+			if mt32Dir == "" {
+				mt32Dir = "roms"
 			}
-			if err := snd.StartupMT32(dir); err != nil {
+			if err := snd.StartupMT32(mt32Dir); err != nil {
 				fmt.Println("MT-32:", err, "- using the AdLib emulation")
 				snd.Startup(false)
 			} else {

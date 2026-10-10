@@ -45,7 +45,9 @@ The PC speaker is not emulated.
 `-data` with a cover picture, and exits. This mode is for
 [goplay](https://ruzzoli.de/goplay/), which runs the WebAssembly build
 (`GOOS=js GOARCH=wasm go build ./cmd/uw1`) on the player's own files, with
-`GOPLAY_DATA` naming the game's folder.
+`GOPLAY_DATA` naming the game's folder. When the MT-32 on that page has its
+ROMs, goplay also sets `GOPLAY_MT32` and the music plays on it (munt
+compiled to WebAssembly, offered by the page as `goplayMT32`).
 
 ## Debugging
 
