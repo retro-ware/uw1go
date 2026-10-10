@@ -24,6 +24,10 @@ func mainloop() {
 
 // doChanges runs editor_dispatch[scrnum][bit] for each change bit set.
 func doChanges() {
+	if inGame && scrnum == 0 {
+		debugWarp()
+		debugTalk()
+	}
 	if changed == 0 {
 		return
 	}

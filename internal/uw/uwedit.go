@@ -54,6 +54,7 @@ func initWorld() {
 	initStrings()
 	MapInit()
 	initInput()
+	initDebug()
 	initKeyboard()
 	ReadCfg()
 	initSounds()

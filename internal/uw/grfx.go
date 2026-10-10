@@ -184,3 +184,19 @@ func loadBitMap(pal int, name string) bool {
 	}
 	return true
 }
+
+// camerasFade is the crystal ball's view: fade to the detached camera, stay while the
+// mouse button is held, then fade back to the player's eye.
+func camerasFade() {
+	renderFB()
+	attachEye(-1)
+	fadeout3d(5)
+	renderFB()
+	fadein3d(5)
+	mouseRelease(true)
+	renderFB()
+	fadeout3d(5)
+	attachEye(1)
+	renderFB()
+	fadein3d(5)
+}

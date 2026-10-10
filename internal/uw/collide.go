@@ -10,16 +10,16 @@ package uw
 
 // MotionCalc is the motion calculation record.
 type MotionCalc struct {
-	x, y, z       int16
-	heading       uint16
-	radius        byte
-	height        byte
-	index         int16
-	hits0, hits1  int16
-	floor, top    byte
-	slope, open   byte
-	found, count  byte
-	first         int8
+	x, y, z      int16
+	heading      uint16
+	radius       byte
+	height       byte
+	index        int16
+	hits0, hits1 int16
+	floor, top   byte
+	slope, open  byte
+	found, count byte
+	first        int8
 }
 
 // Collision is what the object checks found in a mover's way.

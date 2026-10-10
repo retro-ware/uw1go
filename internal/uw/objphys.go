@@ -436,7 +436,7 @@ func objDeal(obj *Object, x, y, how int) *Object {
 			if ComObjData[obj.Item()].QualClass() == 3 {
 				destroy = false
 			} else {
-				destroy = checkRes(obj, 1, DMG_FIRE)
+				destroy = checkRes(obj, 1, DMG_FIRE) != 0
 			}
 		} else if curP.hits0&8 == 0 && !dealBlocked {
 			if low {

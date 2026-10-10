@@ -26,7 +26,7 @@ func DoSpecialActions(slot int) {
 	case DISP_BAG:
 		CloseTheBag()
 	case DISP_WORLD:
-		if CursorObjPtr != nil && ReturnObject(CursorObjPtr, 1) {
+		if CursorObjPtr != nil && ReturnObject(CursorObjPtr, true) {
 			if HasOrIsObj(CursorObjPtr, ITEM_MOONSTONE) {
 				player.SetMoonstone(PlayerLevel)
 			}
