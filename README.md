@@ -25,6 +25,7 @@ UW.EXE, as underworld-exhumed has it.
 - Sliding along a wall no longer turns the view, and the right-hand panel slides twice as fast.
 - The mouse acts and the keys walk. A left click in the view does what the thing clicked allows: it talks to a creature, takes an item, uses a door, lever, button, chest, the shrine or a fountain, and looks at anything else, or at what is out of reach. A right click looks. While something is carried, a left click in the view drops or throws it. The icons on the left still force one action.
 - `F5` draws the weapon or puts it away. While it is drawn the left button slashes, the right thrusts and `Space` bashes; hold one to charge the blow and let go to strike.
+- Looking at gear shows its stats after Angband: a weapon's damage by attack type, (slash/bash/thrust); the damage of a shot, (n), on ammunition and on the launcher that fires it, before the missile skill scales it; armour's protection at its quality, [n]. An identified enchantment adds (+accuracy,+damage) to a weapon and [n,+toughness] to armour, or (+n) for Protection, which makes the wearer harder to hit: "a longsword of Additional Damage (10/4/8) (+0,+3)", "a bow (8)", "a breastplate [4,+4]".
 - `F1`, `?` or `Ctrl+H` shows a help screen with the controls and every key (three pages: `Space` or a click turns on, `Esc` or the CLOSE scroll returns). `Esc` opens the options panel, which `F1` did in DOS.
 - The keys are UltimaHacks':
 

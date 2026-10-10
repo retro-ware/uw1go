@@ -79,6 +79,12 @@ var helpPages = []helpPage{
 		{"F6", "use mode"},
 		{"F9", "track"},
 		{"F10", "sleep"},
+		{"#", "Looking at gear"},
+		{"(4/2/5)", "slash/bash/thrust"},
+		{"(8)", "damage per shot"},
+		{"(+1,+2)", "accuracy, damage"},
+		{"[4,+2]", "armour, toughness"},
+		{"[4] (+2)", "harder to hit"},
 	}}},
 	{title: "Keys: Magic, Panels, Game", keyW: []int{52, 40}, cols: [][]helpRow{{
 		{"#", "Magic and panels"},
