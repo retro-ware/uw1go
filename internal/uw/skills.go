@@ -3,7 +3,7 @@ package uw
 import (
 	"strconv"
 
-	"github.com/felix/uw1go/internal/gr"
+	"github.com/memmaker/uw1go/internal/gr"
 )
 
 // Port of SKILLS.C (skills, levelling, mantras, end-game statistics, sleep and dreams,

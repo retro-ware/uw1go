@@ -4,7 +4,7 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/felix/uw1go/internal/r3d"
+	"github.com/memmaker/uw1go/internal/r3d"
 )
 
 // Port of LIGHTING.C: the light level of the 3D view. lightabs (expand.go) holds the 16

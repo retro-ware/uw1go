@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/felix/uw1go/internal/host"
-	"github.com/felix/uw1go/internal/snd"
+	"github.com/memmaker/uw1go/internal/host"
+	"github.com/memmaker/uw1go/internal/snd"
 )
 
 // SOUND.C: the MIDI sound effects and instruments played on channels locked from the

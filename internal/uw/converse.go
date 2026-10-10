@@ -3,7 +3,7 @@ package uw
 import (
 	"strconv"
 
-	"github.com/felix/uw1go/internal/gr"
+	"github.com/memmaker/uw1go/internal/gr"
 )
 
 // CONVERSE.C: conversations. TalkTo checks the NPC will talk and switches to screen 4,

@@ -3,7 +3,7 @@ package uw
 import (
 	"strconv"
 
-	"github.com/felix/uw1go/internal/gr"
+	"github.com/memmaker/uw1go/internal/gr"
 )
 
 // Port of CHARGEN.C: character creation. A new player's starting record (initChar), the

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/felix/uw1go/internal/host"
+	"github.com/memmaker/uw1go/internal/host"
 )
 
 // UTIL.C: small helpers.

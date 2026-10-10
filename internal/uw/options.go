@@ -1,6 +1,6 @@
 package uw
 
-import "github.com/felix/uw1go/internal/gr"
+import "github.com/memmaker/uw1go/internal/gr"
 
 // OPTIONS.C: the options panel: the left-hand panel's pages of buttons (save, restore,
 // music, sound effects, detail, quit) from the "optbtns" art, the loop that moves the

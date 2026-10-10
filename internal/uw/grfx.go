@@ -3,7 +3,7 @@ package uw
 import (
 	"io"
 
-	"github.com/felix/uw1go/internal/gr"
+	"github.com/memmaker/uw1go/internal/gr"
 )
 
 // Ports of GRFX.C (graphics start-up, fonts, palettes and fades), COLCYCLE.C (palette

@@ -1,6 +1,6 @@
 package uw
 
-import "github.com/felix/uw1go/internal/gr"
+import "github.com/memmaker/uw1go/internal/gr"
 
 // SCRSHOT.C: saving the screen as a GIF file (Alt+Q). saveScreenshot picks the first
 // unused name uwpicNNN.gif (NNN octal), writes a GIF87a header for a 320 by 200 picture

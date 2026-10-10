@@ -3,8 +3,8 @@ package uw
 import (
 	"io"
 
-	"github.com/felix/uw1go/internal/gr"
-	"github.com/felix/uw1go/internal/r3d"
+	"github.com/memmaker/uw1go/internal/gr"
+	"github.com/memmaker/uw1go/internal/r3d"
 )
 
 // Port of LOADGR.C: art loading, .GR picture files into graphics slots and .TR textures.

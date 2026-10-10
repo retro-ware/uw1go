@@ -3,7 +3,7 @@ package uw
 import (
 	"strconv"
 
-	"github.com/felix/uw1go/internal/gr"
+	"github.com/memmaker/uw1go/internal/gr"
 )
 
 // Port of SCROLLIO.C: the message scroll at the bottom of the game screen and the

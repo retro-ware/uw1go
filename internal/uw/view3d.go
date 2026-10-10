@@ -3,8 +3,8 @@ package uw
 import (
 	"time"
 
-	"github.com/felix/uw1go/internal/gr"
-	"github.com/felix/uw1go/internal/r3d"
+	"github.com/memmaker/uw1go/internal/gr"
+	"github.com/memmaker/uw1go/internal/r3d"
 )
 
 // Port of VIEW3D.C: setting up and drawing a frame of the 3D view. setupVars turns the

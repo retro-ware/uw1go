@@ -4,7 +4,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/felix/uw1go/internal/gr"
+	"github.com/memmaker/uw1go/internal/gr"
 )
 
 // BARTER.C: bartering in conversations: the four trade slots a side on the conversation

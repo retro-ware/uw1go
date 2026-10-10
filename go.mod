@@ -1,4 +1,4 @@
-module github.com/felix/uw1go
+module github.com/memmaker/uw1go
 
 go 1.26.2
 

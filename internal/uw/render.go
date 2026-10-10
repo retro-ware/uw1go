@@ -1,8 +1,8 @@
 package uw
 
 import (
-	"github.com/felix/uw1go/internal/gr"
-	"github.com/felix/uw1go/internal/r3d"
+	"github.com/memmaker/uw1go/internal/gr"
+	"github.com/memmaker/uw1go/internal/r3d"
 )
 
 // The bridge to the renderer (internal/r3d, the translated seg003/seg004/seg019): it is

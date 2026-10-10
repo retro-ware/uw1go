@@ -3,7 +3,7 @@ package uw
 import (
 	"fmt"
 
-	"github.com/felix/uw1go/internal/r3d"
+	"github.com/memmaker/uw1go/internal/r3d"
 )
 
 // Port of CRPAGES.C (ovr113): the EMS cache of critter animation art. Critter file xx's

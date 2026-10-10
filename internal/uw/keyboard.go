@@ -1,6 +1,6 @@
 package uw
 
-import "github.com/felix/uw1go/internal/host"
+import "github.com/memmaker/uw1go/internal/host"
 
 // Port of KEYQUEUE.ASM (with KBDINT.ASM's Caps Lock toggle): the keyboard driver. Scan codes
 // come from host.KeyRing; E0-prefixed keys become 60h plus their place in the table at
