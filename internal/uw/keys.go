@@ -6,18 +6,18 @@ package uw
 // handler, so the game decides everything as it does for the click. Bound in initPlayer and
 // AutoMap.
 
-// keyAttack: Space (type 0) bashes, as the mouse buttons slash and thrust; . ; p (3, 6, 9)
-// thrust, slash and bash. Each blow is charged while its key is held.
-func keyAttack(typ int) {
+// keySpace: Space bashes with the weapon drawn, as the mouse buttons slash and thrust, and
+// is charged while held; without a weapon it jumps (spaceJump).
+func keySpace() {
+	if !armed() {
+		spaceJump()
+		return
+	}
 	if pQatt == 0 {
 		attackButton = 0
 	}
-	if typ == 0 {
-		playerAttack(swingBash)
-		attackKey = 0x39 // Space's scan code, held to charge, as UltimaHacks
-		return
-	}
-	playerAttack(typ)
+	playerAttack(swingBash)
+	attackKey = 0x39 // Space's scan code, held to charge, as UltimaHacks
 }
 
 // keyFlasks: h, as a click on the left flask, then on the right.
@@ -37,14 +37,11 @@ func keyPanel(panel int) {
 	setScreenFrame(SCR_PANEL, panel)
 }
 
-// keyBag: c, v, b close the open container, scroll the inventory down, up.
+// keyBag: v, b scroll the inventory down (1), up.
 func keyBag(how int) {
-	switch how {
-	case 0:
-		CloseTheBag()
-	case 1:
+	if how == 1 {
 		ScrollItemsDown()
-	default:
+	} else {
 		ScrollItemsUp()
 	}
 }

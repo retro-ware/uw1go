@@ -498,16 +498,16 @@ func wdialog(prompt string, initial *string, anychar bool, maxlen int) (int, str
 		case KEY_CTRL | 'k':
 			pos = apos()
 			text = text[:pos]
-		case KEY_HOME, KEY_GHOME, KEY_CTRL | 'a':
+		case KEY_GHOME, KEY_CTRL | 'a':
 			pos = 0
-		case KEY_END, KEY_GEND, KEY_CTRL | 'e':
+		case KEY_GEND, KEY_CTRL | 'e':
 			pos = len(text)
-		case KEY_RIGHT, KEY_GRIGHT, KEY_CTRL | 'f':
+		case KEY_GRIGHT, KEY_CTRL | 'f':
 			pos = apos()
 			if len(text) > pos {
 				pos++
 			}
-		case KEY_LEFT, KEY_GLEFT, KEY_CTRL | 'b':
+		case KEY_GLEFT, KEY_CTRL | 'b':
 			pos = apos()
 			if pos > 0 {
 				pos--

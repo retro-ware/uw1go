@@ -106,19 +106,12 @@ func KEY() int {
 	}
 }
 
-// otherKeyDown: a key is held that is none of the modifiers (Shift, Alt, Ctrl, ...).
-func otherKeyDown() bool {
-next:
-	for i, on := range keyOn {
-		if on == 0 {
-			continue
+// isModifierKey: keyOn's index i is one of the modifiers (Shift, Alt, Ctrl, ...).
+func isModifierKey(i int) bool {
+	for m := range modKeyA {
+		if i == modKeyA[m]&0xFF || i == modKeyB[m]&0xFF {
+			return true
 		}
-		for m := range modKeyA {
-			if i == modKeyA[m]&0xFF || i == modKeyB[m]&0xFF {
-				continue next
-			}
-		}
-		return true
 	}
 	return false
 }

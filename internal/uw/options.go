@@ -3,10 +3,10 @@ package uw
 import "github.com/memmaker/uw1go/internal/gr"
 
 // OPTIONS.C: the options panel: the left-hand panel's pages of buttons (save, restore,
-// music, sound effects, detail, quit) from the "optbtns" art, the loop that moves the
-// highlight and presses buttons, and each page's handler. A page is a number,
-// optionsPage: 0 save, 1 restore, 2 music, 3 sound effects, 4 detail, 5 quit, 6 the top
-// page (7 while closed). pagePics gives each of a page's seven rows (row 0 at the
+// music, sound effects, quit) from the "optbtns" art, the loop that moves the highlight and
+// presses buttons, and each page's handler. A page is a number, optionsPage: 0 save, 1
+// restore, 2 music, 3 sound effects, 4 the detail page (gone: the detail is always very
+// high), 5 quit, 6 the top page (7 while closed). pagePics gives each of a page's seven rows (row 0 at the
 // bottom) its button's picture, 0 for none; the lit picture is the next one.
 
 var (
@@ -20,9 +20,9 @@ var (
 		{0, 0x18, 0x24, 0x22, 0x20, 0x1E, 0},
 		{0, 0, 0x1A, 0x16, 0x14, 0, 0},
 		{0, 0, 0x1A, 0x16, 0x14, 0, 0},
-		{0x1C, 0x2C, 0x2A, 0x28, 0x26, 0, 0},
+		{},
 		{0, 0, 0, 0x3B, 0x39, 0, 0},
-		{0x12, 0x10, 0x0E, 0x0C, 0x0A, 0x08, 0x06},
+		{0, 0x12, 0x10, 0x0C, 0x0A, 0x08, 0x06}, // the top page, quit and return a row up
 	}
 	gameoptsDone bool
 	hilitePic    int
@@ -31,8 +31,8 @@ var (
 
 func init() {
 	pageDraw = [7]func(){drawSavePage, drawSavePage, drawMusicAndSoundPage, drawMusicAndSoundPage,
-		drawDetailPage, drawQuitYNPage, drawTopPage}
-	pagePress = [7]func(int){chooseSave, chooseSave, chooseMusic, chooseSounds, chooseDetail,
+		nil, drawQuitYNPage, drawTopPage}
+	pagePress = [7]func(int){chooseSave, chooseSave, chooseMusic, chooseSounds, nil,
 		chooseQuit, chooseTop}
 }
 
@@ -42,8 +42,22 @@ func optionsFrame() {
 }
 
 // runOptionsPanel runs the panel until a choice closes it, drawing the top page first if
-// show is nonzero.
+// show is nonzero. Mouse look is off meanwhile, the pointer on the panel to click its
+// buttons, and comes back as it was if the view is still there.
 func runOptionsPanel(show int) {
+	if was := lookOn; was {
+		lookX, lookY = 0x15, 0x88 // the panel's middle, where mouse look going off leaves it
+		mouseLookSet(false)
+		renderFB() // the view without the crosshair, which no frame clears while the panel is up
+		sendFB()
+		defer func() {
+			if inplist.mode&0x11 != 0 {
+				mouseLookSet(true)
+			} else {
+				lookWas = true // quit to the menu: on again with the next game
+			}
+		}()
+	}
 	LeftPanel = 1
 	if show != 0 {
 		mouseHide()
@@ -69,11 +83,11 @@ func runOptionsPanel(show int) {
 			if x >= 0 && x <= 0x23 && y >= 0 && y <= 0x6C {
 				optionsMouseClick(x, y)
 			}
-		case ' ', KEY_DOWN, KEY_GDOWN:
+		case ' ', KEY_GDOWN:
 			optionsHandleKey(0)
 		case '\r':
 			optionsHandleKey(1)
-		case KEY_GUP, KEY_UP:
+		case KEY_GUP:
 			optionsHandleKey(2)
 		case KEY_ESC:
 			closeOptionPanel()
@@ -115,8 +129,14 @@ func closeOptionPanel() {
 	mouseShow()
 }
 
+// drawTopPage draws the top page without its detail button: the art with return and quit
+// a row up and the bottom row the quit page's empty board.
 func drawTopPage() {
 	drawOptionsBack(1)
+	reloadGrVpic(ICON_OPTB, "optbtns", 3)
+	gr.ShowBlock(slotVram(grsWhich1(ICON_OPTB)), 4, 0xBD-92, 0x23, 0x6C, 0, 92)
+	drawOptionsBtn(2, 0x10)
+	drawOptionsBtn(1, 0x12)
 	hilitePic = -1
 	hilite(6, 6)
 }
@@ -162,15 +182,6 @@ func drawMusicAndSoundPage() {
 	}
 }
 
-func drawDetailPage() {
-	level := player.Detail()
-	hilitePic = -1
-	drawOptionsBack(5)
-	reloadGrVpic(ICON_OPTB+2, "optbtns", level+0x35)
-	picToScreen(ICON_OPTB+2, 5, 0xBC)
-	hilite(4-level, level*2+0x26)
-}
-
 // leaveOptionsPage goes back to the top page, or closes a quick panel.
 func leaveOptionsPage() {
 	if optionsQuick {
@@ -209,26 +220,7 @@ func chooseSounds(row int) {
 	}
 }
 
-// chooseDetail: rows 4 to 1 set detail 0 to 3 and redraw the view; row 0 is done.
-func chooseDetail(row int) {
-	if row >= 1 && row <= 4 {
-		level := 4 - row
-		player.SetDetail(level)
-		setGraphicsLevel()
-		gr.GrSoftPageFlip()
-		renderFB()
-		sendFB()
-		gr.GrSoftPageFlip()
-		reloadGrVpic(ICON_OPTB+2, "optbtns", level+0x35)
-		picToScreen(ICON_OPTB+2, 5, 0xBC)
-		hilite(4-level, level*2+0x26)
-	}
-	if row == 0 {
-		leaveOptionsPage()
-	}
-}
-
-// chooseTop: from the top, save, restore, music, sound, detail, return, quit.
+// chooseTop: from the top, save, restore, music, sound, return, quit; the bottom row is empty.
 func chooseTop(row int) {
 	switch row {
 	case 6:
@@ -243,11 +235,9 @@ func chooseTop(row int) {
 		setOptionsPage(2)
 	case 3:
 		setOptionsPage(3)
-	case 1:
-		closeOptionPanel()
 	case 2:
-		setOptionsPage(4)
-	case 0:
+		closeOptionPanel()
+	case 1:
 		setOptionsPage(5)
 	}
 }
@@ -339,9 +329,7 @@ func optionsHandleKey(key int) {
 	case 0x166:
 		pressOptionsBtn(3)
 	case 0x171:
-		pressOptionsBtn(0)
-	case 0x164:
-		pressOptionsBtn(2)
+		pressOptionsBtn(1)
 	}
 }
 

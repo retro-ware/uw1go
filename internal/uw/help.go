@@ -32,14 +32,15 @@ type helpPage struct {
 var helpPages = []helpPage{
 	{title: "Getting Started", keyW: []int{0}, cols: [][]helpRow{{
 		{"#", "Moving"},
-		{"", "Walk with the keys: W runs, X walks, S backs up, A"},
-		{"", "and D slide, the grey arrow keys turn. Shift jumps."},
+		{"", "W walks, S backs up, A and D slide, the arrow keys"},
+		{"", "turn. Tap Shift to run until you stop. Space jumps;"},
+		{"", "held while standing, it crouches for a long jump."},
+		{"", "Hold C to crouch under low things."},
 		{"", "The mouse aims. ` or ^ (left of 1) frees the pointer."},
 		{"#", "Acting"},
 		{"", "Left-click people to talk, items to take them, and"},
 		{"", "anything else to look at it. Right-click or E uses:"},
 		{"", "opens doors and chests, pulls levers. Q only looks."},
-		{"", "The icons on the left force one action."},
 		{"#", "Fighting"},
 		{"", "F5 draws your weapon or puts it away. While it is out,"},
 		{"", "the left button slashes, the right thrusts and Space"},
@@ -52,32 +53,26 @@ var helpPages = []helpPage{
 	}}},
 	{title: "Keys: Moving and Acting", keyW: []int{56, 44}, cols: [][]helpRow{{
 		{"#", "Moving"},
-		{"W", "run forward"},
-		{"X", "walk forward"},
+		{"W", "walk forward"},
 		{"S", "walk back"},
 		{"A  D", "slide left, right"},
-		{"grey < >", "turn"},
-		{"Ctrl+grey", "step one pace"},
-		{"Shift", "jump"},
-		{"Ctrl+Shift", "long jump"},
+		{"Left Right", "turn"},
+		{"Shift", "tap: run till stop"},
+		{"Space", "jump (hold: long)"},
+		{"C", "crouch while held"},
 		{"Shift Ctrl", "fly up, down"},
 		{"1  3", "look up, down"},
-		{"grey ^ v", "look up, down"},
-		{"2  pad 5", "look ahead"},
+		{"Up Down", "look up, down"},
+		{"2", "look ahead"},
 		{"`  ^", "mouse look off, on"},
 		{"", "(the key left of 1)"},
 		{"Alt+`  Alt+^", "mouse look axes"},
 	}, {
 		{"#", "Acting"},
-		{"Space", "bash (hold)"},
-		{".  ;  P", "thrust, slash, bash"},
+		{"Space", "bash, weapon out"},
 		{"Q", "look at pointer"},
 		{"E", "use at pointer"},
-		{"F2", "talk mode"},
-		{"F3", "get mode"},
-		{"F4", "look mode"},
 		{"F5", "draw, sheathe weapon"},
-		{"F6", "use mode"},
 		{"F9", "track"},
 		{"F10", "sleep"},
 		{"#", "Looking at gear"},
@@ -91,7 +86,6 @@ var helpPages = []helpPage{
 		{"#", "Magic and panels"},
 		{"R", "rune bag"},
 		{"F  F7", "statistics"},
-		{"C", "close container"},
 		{"V  B", "scroll inventory"},
 		{"G", "hunger, time of day"},
 		{"H", "health and mana"},
@@ -100,7 +94,8 @@ var helpPages = []helpPage{
 		{"", "on the shelf;"},
 		{"", "Backspace clears,"},
 		{"", "Space casts"},
-		{"#", "Map (Z)"},
+		{"#", "Map"},
+		{"Z", "open the map"},
 		{"S  W", "level up, down"},
 		{"C", "your level"},
 		{"Esc", "back to the game"},
@@ -111,7 +106,6 @@ var helpPages = []helpPage{
 		{"Ctrl+R", "restore"},
 		{"Ctrl+M", "music"},
 		{"Ctrl+F", "sound"},
-		{"Ctrl+D", "detail"},
 		{"Ctrl+Q", "quit"},
 		{"F1  ?", "this help"},
 		{"Ctrl+H", "this help"},
@@ -135,10 +129,10 @@ func helpKeys() {
 // HelpScreen opens the help screen (editorDispatch[3]'s bit 1).
 func HelpScreen() {
 	if !helpRegistered {
-		for _, k := range []int{' ', KEY_ENTER, KEY_PGDN, KEY_RIGHT, KEY_GRIGHT} {
+		for _, k := range []int{' ', KEY_ENTER, KEY_GPGDN, KEY_GRIGHT} {
 			inputAddkey(k, 1, MODE_HELP, ih(helpTurn))
 		}
-		for _, k := range []int{KEY_PGUP, KEY_BACKSPACE, KEY_LEFT, KEY_GLEFT} {
+		for _, k := range []int{KEY_GPGUP, KEY_BACKSPACE, KEY_GLEFT} {
 			inputAddkey(k, -1, MODE_HELP, ih(helpTurn))
 		}
 		for _, k := range []int{KEY_ESC, KEY_F1, '?', KEY_CTRL | 'h'} {

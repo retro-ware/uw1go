@@ -23,12 +23,23 @@ var (
 	MoveSide    int16 // the slide keys held with PIN_FORWARD: -1 left, 1 right
 	MoveBack    bool  // the back key held with PIN_FORWARD
 
-	moveKeys = [9]byte{0x11, 0x1F, 0x1E, 0x20, 0x2C, 0x2E, 0x2D, 0x12, 0x10}
-	// UltimaHacks' movementKeys, the key held for each of moveKeys' meanings (run,
-	// walk, turn left, turn right, slide left, slide right, back, fly up, fly down): w, x, the
-	// grey Left and Right (0x69 and 0x6A in keyOn: KEY puts E0 keys at 0x60 and up), a, d, s,
-	// left Shift, left Ctrl
-	modernKeys = [9]byte{0x11, 0x2D, 0x69, 0x6A, 0x1E, 0x20, 0x1F, 0x2A, 0x1D}
+	moveKeys = [8]byte{0x11, 0x1E, 0x20, 0x2C, 0x2E, 0x2D, 0x12, 0x10}
+	// UltimaHacks' movementKeys, the key held for each of moveKeys' meanings (forward, turn
+	// left, turn right, slide left, slide right, back, fly up, fly down): w, the grey Left and
+	// Right (0x69 and 0x6A in keyOn: KEY puts E0 keys at 0x60 and up), a, d, s, left Shift,
+	// left Ctrl. UltimaHacks' x, walk, is gone: w walks, and runs once Shift is tapped.
+	modernKeys = [8]byte{0x11, 0x69, 0x6A, 0x1E, 0x20, 0x1F, 0x2A, 0x1D}
+	// Running: a tap of Shift while moving makes every direction run until the player stops
+	// (no movement key held and at rest); w alone walks.
+	Running bool
+	// crouchFrom: when Space went down with the player at rest (0: not crouching). The knees
+	// bend while it is held; let go it jumps, a standing long jump from the full crouch.
+	crouchFrom uint32
+	// Crouched: C is held, or was and there is no room to stand; the player is crouchHeight
+	// tall instead of the adventurer's 23, moves at half the walk and goes under what is
+	// that low. crouchAmt eases the eye down and up (0 to 256).
+	Crouched  bool
+	crouchAmt int
 
 	lastTime   uint32
 	frameInc   byte
@@ -80,9 +91,10 @@ func doPlayerKeyboard() {
 		}
 		switch k {
 		case 0x11:
-			ForwInpRate = 0x70
-		case 0x1F:
-			ForwInpRate = max(ForwInpRate, 0x32)
+			ForwInpRate = 0x32
+			if Running && !Crouched {
+				ForwInpRate = 0x70
+			}
 		case 0x1E:
 			TurnInpRate -= 0x5A
 		case 0x20:
@@ -107,6 +119,16 @@ func doPlayerKeyboard() {
 	if ForwInpRate != 0 && MoveBack { // forward and back cancel, as in Quake
 		ForwInpRate, MoveBack = 0, false
 	}
+	if ForwInpRate == 0 && !MoveBack && MoveSide == 0 && PN.Speed == 0 {
+		Running = false
+	}
+}
+
+// shiftTap is a lone tap of the left Shift: while moving it starts running (Space jumps).
+func shiftTap() {
+	if keyOn[0x11]|keyOn[0x1E]|keyOn[0x20]|keyOn[0x1F] != 0 {
+		Running = true
+	}
 }
 
 // physicsRound charges a round of time and moves everything.
@@ -121,25 +143,6 @@ func physicsRound(delta uint32, easy bool) {
 		frameInc = 0
 	}
 	movePhysics(int(delta), frames, easy)
-}
-
-// playerSimpleMove makes a step-key move, runs one 0x40-unit round of physics with it,
-// and waits until 0x18 ticks have passed since the key.
-func playerSimpleMove(dir int) {
-	start := GameTime()
-	if simpleFizix(dir) {
-		lastTime = GameTime()
-		frameInc += 4
-		PN.Speed = 0
-		if DoAnimO {
-			updateAnimobj(1)
-		}
-		physicsRound(0x40, true)
-		editchng(10)
-	}
-	for GameTime()-start < 0x18 {
-	}
-	mouseClearQ()
 }
 
 // checkPhysics runs the physics for the time since the last call (at most 0x40).
@@ -168,6 +171,16 @@ func movePhysics(incr, frames int, easy bool) {
 	doMod = false
 	playerMod[0] = 0
 	tsteps += byte(incr)
+	crouchHeld := crouchFrom != 0 && keyOn[0x39] != 0
+	if crouchFrom != 0 && !crouchHeld {
+		jump := PIN_JUMP
+		if GameTime()-crouchFrom >= crouchFull && atRest() {
+			jump = PIN_RUN_JUMP // the standing long jump: forward at half the run
+		}
+		crouchFrom = 0
+		parsePlayin(jump)
+	}
+	crouchStep(incr)
 	if PlayerInput == PIN_NONE {
 		doPlayerKeyboard()
 	}
@@ -181,8 +194,42 @@ func movePhysics(incr, frames int, easy bool) {
 	if player.MotionState != 0 {
 		parseEffect()
 	}
+	drop := crouchAmt * crouchEye / 256
+	if crouchHeld {
+		drop = max(drop, int(min(GameTime()-crouchFrom, crouchFull)*crouchDepth/crouchFull))
+	}
+	if drop > 0 {
+		doMod = true
+		playerMod[0] -= int16(drop)
+	}
+	if crouchHeld || drop != lastDrop {
+		editchng(10)
+	}
+	lastDrop = drop
 	setSound(easy)
 	makeNoise(easy)
+}
+
+// The crouch: a full one takes crouchFull ticks (0.3 s) and lowers the eye (0xA4 above the
+// feet) by crouchDepth.
+const (
+	crouchFull  = 0x4C
+	crouchDepth = 0x40
+)
+
+// atRest: the player stands still on the ground.
+func atRest() bool { return PN.Speed == 0 && PN.Vel[2] == 0 && PN.Acc[2] == 0 }
+
+// spaceJump is Space without a weapon drawn: moving or in the air it jumps at once, keeping
+// the motion; at rest it starts the crouch, which movePhysics ends when Space is let go.
+func spaceJump() {
+	if !atRest() {
+		parsePlayin(PIN_JUMP)
+		return
+	}
+	if crouchFrom == 0 {
+		crouchFrom = max(GameTime(), 1)
+	}
 }
 
 // finishPlayer runs the player's physics until the player is at rest.
@@ -198,6 +245,9 @@ func finishPlayer() {
 func movePlayer(incr int) {
 	PN.Radius = byte(ComObjData[ThePlayer.Item()].Radius())
 	PN.Height = byte(ComObjData[ThePlayer.Item()].Height())
+	if Crouched {
+		PN.Height = crouchHeight
+	}
 	playerMod[1], playerMod[2], playerMod[3] = 0, 0, 0
 	setPlayerPhysParams(incr)
 	doPhysics(&PN, &PT)
@@ -419,4 +469,58 @@ func getEye() {
 		c.pitch = 0
 		c.bank = vortTimer << 11
 	}
+}
+
+// The real crouch (C): the collision height while crouched, the eye's drop at the full
+// crouch (as far as the height shrinks: 8 eye units to a collision unit) and the ticks the
+// eye takes to get there.
+const (
+	crouchHeight = 0x0C
+	crouchEye    = (0x17 - crouchHeight) * 8
+	crouchEase   = 0x26
+)
+
+var lastDrop int // the eye's drop last round, to redraw only while it changes
+
+// crouchStep crouches while C is held and stands up once it is let go and there is room,
+// then eases the eye toward the crouch or back.
+func crouchStep(incr int) {
+	if keyOn[0x2E] != 0 {
+		Crouched = true
+	} else if Crouched && playerFits(ComObjData[ThePlayer.Item()].Height()) {
+		Crouched = false
+	}
+	step := max(incr*256/crouchEase, 1)
+	if Crouched {
+		crouchAmt = min(crouchAmt+step, 256)
+	} else {
+		crouchAmt = max(crouchAmt-step, 0)
+	}
+}
+
+// playerFits is whether the player, h tall, fits where it stands: under the ceiling and
+// clear of everything solid above its feet, as setTargz finds what is in a mover's way.
+func playerFits(h int) bool {
+	oldP := curP
+	defer func() { curP = oldP }()
+	var calc MotionCalc
+	curP = &calc
+	curP.index = int16(ObjMemTPtr(ThePlayer))
+	curP.radius = PN.Radius
+	curP.height = byte(h)
+	curP.x, curP.y, curP.z = PN.X>>5, PN.Y>>5, PN.Z>>3
+	if int(curP.z)+h > 0x7F {
+		return false
+	}
+	ObjectCheck(false, false)
+	if curP.found == 0 {
+		return true
+	}
+	processObjlist()
+	for i := int(curP.first); i < int(curP.first)+int(curP.count); i++ {
+		if ComObjData[collItem(i)].Touch() != 0 {
+			return false
+		}
+	}
+	return true
 }

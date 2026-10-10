@@ -66,28 +66,12 @@ func seg009_38C(i int) int { return int(r3d.R16(r3d.Seg051 + 0xC3EC + 2*i)) }
 
 func texFirstPixel(i int) byte { return r3d.Bytes(seg009_38C(i)<<4, 1)[0] }
 
-// setGraphicsLevel applies the detail setting: which faces are texture mapped.
+// setGraphicsLevel texture maps every face: the detail is always very high, the setting
+// gone from the options.
 func setGraphicsLevel() {
-	level := player.Detail()
-	tmapson = 0
-	cie, flr := false, false
-	if level > 0 {
-		tmapson = 1
-		if level > 1 {
-			flr = true
-			if level > 2 {
-				cie = true
-			}
-		}
-	}
-	gctab[1] = polyflr
-	if cie {
-		gctab[1] = txtflr
-	}
-	gftab[1] = polyflr
-	if flr {
-		gftab[1] = txtflr
-	}
+	tmapson = 1
+	gctab[1] = txtflr
+	gftab[1] = txtflr
 	lighton = 1
 }
 
