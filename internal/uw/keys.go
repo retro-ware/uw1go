@@ -38,12 +38,20 @@ func keyBag(how int) {
 }
 
 // keyInteract: q looks (0), e uses (1) what is at the pointer (after UltimaHacks'
-// interactAtCursor): only in the 3D view, and no use while carrying something or aiming.
+// interactAtCursor): in the 3D view or on the inventory panel, and no use while carrying
+// something or aiming.
 func keyInteract(use int) {
 	if GameInputMode != 0 && use != 0 {
 		return
 	}
 	x, y := mouseGetxy()
+	if onPanel(x, y) {
+		if RightPanel == PANEL_INV && GameInputMode == GIM_NONE { // the item under the pointer
+			inplist.x, inplist.y = x-0xF0, y-0x52
+			DoInventoryMouse(use*2 - 2) // 0 uses, -2 looks
+		}
+		return
+	}
 	if x < m3dx || x > m3dx+m3dw || y > m3dy || y < m3dy-m3dh {
 		return
 	}

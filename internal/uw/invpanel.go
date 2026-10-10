@@ -130,6 +130,8 @@ func ClearInventory() {
 // DoInventoryMouse handles a click in the inventory panel (how: the kind of click, -2 a
 // look).
 func DoInventoryMouse(how int) {
+	// how: invTake a left click, which picks the item up; 0 a use, which picks it up when
+	// dragged; -2 a look; 1 a target; 4 carrying
 	pick := false
 	var split *Object
 	held := CursorObjPtr != nil
@@ -146,7 +148,7 @@ func DoInventoryMouse(how int) {
 		if CursorObjPtr == nil && slot != -1 && slot != INV_BAG {
 			pick = true
 		}
-		if pick && mouseDragged(true) {
+		if pick && (how == invTake || mouseDragged(true)) {
 			obj := ObjPtrTMem(&Inventory[slot])
 			if obj.IsQuant() != 0 && obj.LinkF()&LINK_SPECIAL == 0 {
 				if obj.LinkF() != 1 {
@@ -184,6 +186,11 @@ func DoInventoryMouse(how int) {
 			}
 			if split != nil {
 				GameInputMode = 1
+				return
+			}
+			if how == invTake && !mouseDragged(true) { // a click: carried till the next puts it down
+				mouseRelease(true)
+				GameInputMode = GIM_CARRY
 				return
 			}
 		}
@@ -723,8 +730,12 @@ func displayEnc(show bool) bool {
 	return drawn
 }
 
-// FindInventoryHit is the display position under screen point x, y, or -1.
+// FindInventoryHit is the display position under screen point x, y, or -1. The view lies
+// under the panel while it shows: a point on the panel is a slot or nothing, not the world.
 func FindInventoryHit(x, y int) int {
+	if onPanel(x, y) {
+		return invSlotAt(x, y)
+	}
 	if inplist.mode != 4 {
 		if x > PLeft && PLeft+PWid > x && y > PBot && PBot+PHgt > y {
 			return DISP_WORLD
@@ -732,6 +743,11 @@ func FindInventoryHit(x, y int) int {
 	} else if x > 0x8B && x < 0xC1 && y > 0x98 && y < 0xBE {
 		return DISP_BARTER
 	}
+	return invSlotAt(x, y)
+}
+
+// invSlotAt is the inventory display position at x, y, or -1.
+func invSlotAt(x, y int) int {
 	for i := range InvDisplay {
 		r := &InvDisplay[i]
 		if r.left <= x && r.right >= x && r.bottom <= y && r.top >= y {

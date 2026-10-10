@@ -586,6 +586,9 @@ func invLook() {
 }
 
 // mousInInv handles inventory panel clicks by GameInputMode.
+// invTake is DoInventoryMouse's left click: the item under it is picked up.
+const invTake = 2
+
 func mousInInv() {
 	newPlObj = nil
 	switch GameInputMode {
@@ -593,11 +596,11 @@ func mousInInv() {
 		if CursorObjPtr != nil {
 			DoInventoryMouse(0)
 		} else {
-			switch inplist.cmd {
+			switch inplist.cmd { // the left button takes, the right uses (in a conversation looks)
 			case 1, 3:
-				DoInventoryMouse(0)
+				DoInventoryMouse(invTake)
 			case 2:
-				if RightButtonThing == IMODE_USE && inplist.mode != MODE_CONV {
+				if inplist.mode != MODE_CONV {
 					DoInventoryMouse(0)
 				} else {
 					DoInventoryMouse(-2)

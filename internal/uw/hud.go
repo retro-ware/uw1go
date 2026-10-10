@@ -530,3 +530,8 @@ func hideEnemyHealth() {
 		hudClear(healthX, healthY, healthW+2, healthH+2)
 	}
 }
+
+// onPanel is whether screen point x, y (y up) is on the right-hand panel while it shows.
+func onPanel(x, y int) bool {
+	return panelShown && x >= panelX && x < panelX+panelW && y <= panelY && y > panelY-panelH
+}

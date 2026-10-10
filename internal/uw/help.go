@@ -47,9 +47,9 @@ var helpPages = []helpPage{
 		{"", "bashes. Hold one to charge the blow, let go to strike."},
 		{"#", "Inventory"},
 		{"", "Left-click an item to pick it up or put it down,"},
-		{"", "right-click it to look at it. Carrying something, a"},
-		{"", "left click in the view drops or throws it. In mouse"},
-		{"", "look a take goes straight into the pack."},
+		{"", "right-click or E to use it (open, eat), Q to look."},
+		{"", "Carrying something, a left click in the view drops"},
+		{"", "or throws it. Mouse look takes go into the pack."},
 	}}},
 	{title: "Keys: Moving and Acting", keyW: []int{56, 44}, cols: [][]helpRow{{
 		{"#", "Moving"},
