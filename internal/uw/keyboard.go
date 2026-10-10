@@ -105,3 +105,20 @@ func KEY() int {
 		return int(ch) | int(c)<<8
 	}
 }
+
+// otherKeyDown: a key is held that is none of the modifiers (Shift, Alt, Ctrl, ...).
+func otherKeyDown() bool {
+next:
+	for i, on := range keyOn {
+		if on == 0 {
+			continue
+		}
+		for m := range modKeyA {
+			if i == modKeyA[m]&0xFF || i == modKeyB[m]&0xFF {
+				continue next
+			}
+		}
+		return true
+	}
+	return false
+}

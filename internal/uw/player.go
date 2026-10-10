@@ -112,7 +112,7 @@ func initPlayer() {
 		k := KEY_CTRL | int(c)
 		inputAddkey(k, k, 1, ih(doOptionShortcut))
 	}
-	inputAddkey(KEY_F1, 5, 1, ih(dealWithIcons))
+	helpKeys() // F1 opens the help (help.go), Esc the options panel
 	inputAddkey(KEY_F2, 4, 1, ih(dealWithIcons))
 	inputAddkey(KEY_F3, 3, 1, ih(dealWithIcons))
 	inputAddkey(KEY_F4, 2, 1, ih(dealWithIcons))

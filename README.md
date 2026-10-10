@@ -23,6 +23,7 @@ UW.EXE, as underworld-exhumed has it.
 - You can look three times as far up and down, and the squares beside and behind you are drawn too. Creatures and objects keep their size when the view pitches.
 - Mouse look: `` ` `` turns it on and off. While it is on, the mouse turns the view and the cursor stays in the middle as a crosshair. `` Alt+` `` cycles through the axis inversions. `UW1GO_LOOK_SPEED` sets its speed in percent (10 to 400, default 100).
 - Sliding along a wall no longer turns the view, and the right-hand panel slides twice as fast.
+- `F1`, `?` or `Ctrl+H` shows a help screen with the controls and every key (three pages: `Space` or a click turns on, `Esc` or the CLOSE scroll returns). `Esc` opens the options panel, which `F1` did in DOS.
 - The keys are UltimaHacks':
 
 | Keys | Action |
@@ -31,7 +32,7 @@ UW.EXE, as underworld-exhumed has it.
 | `A` `D` | slide left, right |
 | grey `←` `→` | turn |
 | `Ctrl` + grey arrows | step forward, back, left, right |
-| left `Shift` / `Ctrl` | fly up / down (while flying); a lone left `Shift` jumps, with `Ctrl` a standing long jump |
+| left `Shift` / `Ctrl` | fly up / down (while flying); a lone left `Shift` jumps when let go, with `Ctrl` a standing long jump |
 | `1` `3` / grey `↑` `↓`, keypad `5` | look up, down, straight ahead |
 | `Space` | attack with the last attack type; `.` `;` `P` pick bash, slash, thrust |
 | `Q` / `E` | look at / use what is under the cursor |
