@@ -13,6 +13,8 @@ import (
 // "tick:what:args" with the tick counted in host ticks from the start:
 //
 //	k:HEX        a key's scan code (E0 keys as E0xx), pressed and released
+//	d:HEX, u:HEX the key pressed, released (held between)
+//	l:DX:DY      mouse motion while mouse-look is on, screen pixels
 //	m:X:Y        move the pointer to (X, Y), screen pixels from the top left
 //	c:X:Y        move there and click the left button
 //	r:X:Y        the same with the right button
@@ -52,7 +54,7 @@ func init() {
 		ev := scriptEvent{tick: t, what: f[1], raw: f[2:]}
 		for _, a := range f[2:] {
 			base := 10
-			if ev.what == "k" {
+			if ev.what == "k" || ev.what == "d" || ev.what == "u" {
 				base = 16
 			}
 			v, _ := strconv.ParseInt(a, base, 32)
@@ -78,6 +80,20 @@ func runScript() bool {
 		ev := script[0]
 		script = script[1:]
 		switch ev.what {
+		case "d", "u":
+			if len(ev.args) > 0 {
+				c := ev.args[0]
+				if c > 0xFF {
+					pushScan(scan{byte(c), true}, ev.what == "u")
+				} else {
+					pushScan(scan{byte(c), false}, ev.what == "u")
+				}
+			}
+		case "l":
+			if len(ev.args) >= 2 {
+				LookDX += ev.args[0]
+				LookDY += ev.args[1]
+			}
 		case "k":
 			if len(ev.args) > 0 {
 				c := ev.args[0]

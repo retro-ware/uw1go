@@ -570,7 +570,7 @@ func adjustPanel() {
 			initPanelflip(int(goal[SCR_PANEL]), 0xEC, 0xC0, 0x53, 0x72)
 			RightPanel = PANEL_TURNING
 		}
-		if doPanelFrame() {
+		if doPanelFrame() || doPanelFrame() { // two steps a frame (UltimaHacks' faster panels)
 			setting[SCR_PANEL] = goal[SCR_PANEL]
 			RightPanel = int(goal[SCR_PANEL])
 			pbufFlag = false

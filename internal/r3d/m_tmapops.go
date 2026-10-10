@@ -6395,7 +6395,14 @@ L6874:
 L6877:
 	AX = (AX << uint((uint32(uint8(CX)) & 0x1F)))
 L6879:
-	imul16(rw(pDS, 0x160A))
+	if FullSprites {
+		{
+			AX = uint16((int32(AX) >> 1))
+			DX = AX
+		}
+	} else {
+		imul16(rw(pDS, 0x160A))
+	}
 L687D:
 	ww(pDS, (DI + 2), add16(rw(pDS, (DI+2)), DX, 0))
 L6880:
@@ -6415,7 +6422,14 @@ L6893:
 L6896:
 	AX = (AX << uint((uint32(uint8(CX)) & 0x1F)))
 L6898:
-	imul16(rw(pDS, 0x160A))
+	if FullSprites {
+		{
+			AX = uint16((int32(AX) >> 1))
+			DX = AX
+		}
+	} else {
+		imul16(rw(pDS, 0x160A))
+	}
 L689C:
 	ww(pDS, 0x15FE, DX)
 L68A0:

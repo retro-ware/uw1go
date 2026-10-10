@@ -195,9 +195,13 @@ func do3dGrab() {
 
 // renderFB draws a frame into the frame buffer only.
 func renderFB() {
-	setupVars()
-	resetDb()
-	do2dclip()
+	if steepView() {
+		viewPasses()
+	} else {
+		setupVars()
+		resetDb()
+		do2dclip()
+	}
 	grPutlab(0xA0)
 	dbw(0)
 	runRender()
@@ -206,7 +210,11 @@ func renderFB() {
 // establishView draws a frame and shows it.
 func establishView() {
 	strtime = GameTime()
-	if setupVars() {
+	if steepView() {
+		viewPasses()
+		grPutlab(0xA0)
+		dbw(0)
+	} else if setupVars() {
 		resetDb()
 		do2dclip()
 		grPutlab(0xA0)
@@ -629,3 +637,118 @@ type camera struct{ x, y, z, heading, pitch, bank int16 }
 
 // cPlayer is the camera of the current frame, the eye turned into the first quadrant.
 var cPlayer camera
+
+// wide-pitch's view beyond the original's pitch (UltimaHacks' setupPerspectiveAndEnqueueDraw,
+// as underworld-exhumed's VIEW3D.C has it): the original's grid reaches 45 degrees either side
+// of the heading and no further back than the eye's row, which at a steep pitch leaves the
+// bottom (or top) of the view empty. Two passes go into the one database, after one header:
+// first the squares behind the player, the grid built with the heading turned half round and
+// cut to a small diamond, without their objects, each point turned back into the forward frame
+// (SetPnt); then the view ahead, its edge rays opened to a right angle either side and the
+// squares beyond 45 degrees of the heading dropped unless within five squares.
+var (
+	drawingBehind bool // the back pass is queuing
+	twoPasses     bool // either pass is (the queue guard)
+	queueWarned   bool
+)
+
+// steepView: the view pitches at all. Even within the original's pitch
+// its grid's 45 degrees leave the bottom corners of a view pitched down (the top of one
+// pitched up) empty where the squares beside the player show, so any pitch takes the opened
+// view ahead; only one beyond the original's needs the squares behind as well.
+func steepView() bool {
+	return PlayerPitch != 0
+}
+
+func viewPasses() {
+	resetDb()
+	twoPasses = true
+	processGridWith(func() {
+		if PlayerPitch > 0x1000 || PlayerPitch < -0x1000 {
+			drawingBehind = true
+			PlayerFacing = int16(uint16(PlayerFacing) + 0x8000)
+			setupVars()
+			initGrid()
+			openRays()
+			buildGrid()
+			cullRearward()
+			subprocess()
+			PlayerFacing = int16(uint16(PlayerFacing) + 0x8000)
+			drawingBehind = false
+		}
+		setupVars()
+		initGrid()
+		openRays()
+		buildGrid()
+		cullForward()
+		mousQUp(false)
+		subprocess()
+	})
+	twoPasses = false
+}
+
+// openRays turns initGrid's edge rays (heading -+ 0x2040) to a right angle either side: the
+// sines -0x7FFF and 0x7FFF and cosines 0, scaled as initGrid scales its own.
+func openRays() {
+	gvecs[0].dx, gvecs[0].dy = -0x800, 0
+	gvecs[1].dx, gvecs[1].dy = 0x7FF, 0
+}
+
+// cullRearward keeps row 0 within 3 columns of the eye, row 1 within 5, row 2 within 3.
+func cullRearward() {
+	for row := 0; row < 17; row++ {
+		lim := -1
+		switch row {
+		case 0, 2:
+			lim = 3
+		case 1:
+			lim = 5
+		}
+		for col := -16; col <= 16; col++ {
+			if col > lim || col < -lim {
+				glocs[glocAt(row, col+16)].flags = 0
+			}
+		}
+	}
+}
+
+// cullForward drops the squares outside 45 degrees of the heading, unless |column| + row <= 5.
+func cullForward() {
+	la, ra := cPlayer.heading-0x2000, cPlayer.heading+0x2000
+	ls, lc := cSinCos(int(uint16(la)))
+	rs, rc := cSinCos(int(uint16(ra)))
+	for row := 0; row < 17; row++ {
+		left, right := -16, 16
+		if la > -0x3F00 {
+			left = max(int(int16(int32(row+1)*int32(ls)/int32(lc)))-1, -16)
+		}
+		if ra < 0x3F00 {
+			right = min(int(int16(int32(row+1)*int32(rs)/int32(rc)))+1, 16)
+		}
+		for col := -16; col <= 16; col++ {
+			if iabs(col)+row > 5 && (col < left || col > right) {
+				glocs[glocAt(row, col+16)].flags = 0
+			}
+		}
+	}
+}
+
+// queueFull: a square may not be queued. The database ends at seg051:AFF4 (INSTANCE.ASM's
+// _dblen); the original's one pass never comes near it, two passes queue more. The back pass
+// may use a quarter of the space, so that the view ahead always has the rest; the view ahead
+// stops 0x300 bytes short of the end, as UltimaHacks' enqueueDrawBlock does.
+func queueFull() bool {
+	const end = 0xAFF4
+	limit := end - 0x300
+	if drawingBehind {
+		limit = dbEntry + (end-dbEntry)/4
+	}
+	if !twoPasses || dbptr <= limit {
+		return false
+	}
+	if !queueWarned {
+		dprintf("wide-pitch: the render queue is full; squares left out\n")
+		queueWarned = true
+	}
+	return true
+}

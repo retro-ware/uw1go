@@ -63,23 +63,45 @@ func initPlayer() {
 		name := player.Name[:]
 		playerNameHandle = makeString(&name, STRBLK_PLAYER)
 	}
-	for _, k := range []struct {
-		key, arg, mask int
-	}{{'w', 0x0E, 1}, {'s', 5, 1}, {'a', 3, 1}, {'d', 4, 1}, {'z', 9, 1}, {'c', 0x0A, 1},
-		{'x', 8, 1}, {'e', 0x0C, 0x1B}, {'q', 0x0D, 0x1B}} {
-		inputAddkey(k.key, k.arg, k.mask, ih(parsePlayin))
-	}
-	inputAddkey('A', -1, 1, ih(playerSimpleMove))
-	inputAddkey('D', 1, 1, ih(playerSimpleMove))
-	inputAddkey('S', 0, 1, ih(playerSimpleMove))
-	inputAddkey('X', -2, 1, ih(playerSimpleMove))
-	inputAddkey('W', 2, 1, ih(playerSimpleMove))
+	// the original's letter keys (w s a d z c x e q, W A S D X) are UltimaHacks' below
 	inputAddmouse(0x6B, 0x21, 0x7B, 0x2F, -1, 1, ih(playerSimpleMove))
 	inputAddmouse(0x82, 0x1F, 0x92, 0x2C, 0, 1, ih(playerSimpleMove))
 	inputAddmouse(0x9B, 0x21, 0xAA, 0x2F, 1, 1, ih(playerSimpleMove))
-	inputAddkey('3', 1, 0x11, ih(chgPlyp))
-	inputAddkey('1', -1, 0x11, ih(chgPlyp))
 	inputAddkey('2', 0, 0x11, ih(chgPlyp))
+	inputAddkey('`', 0, 0x11, func(any) { mouseLookToggle() })
+	inputAddkey(KEY_ALT|'`', 0, 0x11, func(any) { mouseLookOrient() })
+	// UltimaHacks' keys (keys.go), its input-mode masks
+	inputAddkey(' ', 0, 1, ih(keyAttack))
+	inputAddkey('.', 3, 1, ih(keyAttack))
+	inputAddkey(';', 6, 1, ih(keyAttack))
+	inputAddkey('p', 9, 1, ih(keyAttack))
+	inputAddkey('r', 1, 1, ih(keyPanel))
+	inputAddkey('f', 2, 1, ih(keyPanel))
+	inputAddkey('q', 0, 1, ih(keyInteract))
+	inputAddkey('e', 1, 1, ih(keyInteract))
+	inputAddkey('z', 0, 1, func(any) { newscr(2) })
+	inputAddkey('c', 0, 1, ih(keyBag))
+	inputAddkey('v', 1, 1, ih(keyBag))
+	inputAddkey('b', 2, 1, ih(keyBag))
+	inputAddkey('g', 0, 1, func(any) { printInfo() })
+	inputAddkey('h', 0, 1, func(any) { keyFlasks() })
+	inputAddkey(KEY_CTRL|KEY_GUP, 0, 1, ih(playerSimpleMove)) // the grey arrows
+	inputAddkey(KEY_CTRL|KEY_GDOWN, -2, 1, ih(playerSimpleMove))
+	inputAddkey(KEY_CTRL|KEY_GLEFT, -1, 1, ih(playerSimpleMove))
+	inputAddkey(KEY_CTRL|KEY_GRIGHT, 1, 1, ih(playerSimpleMove))
+	inputAddkey('1', 1, 0x11, ih(chgPlyp))
+	inputAddkey(KEY_GUP, 1, 0x11, ih(chgPlyp))
+	inputAddkey('3', -1, 0x11, ih(chgPlyp))
+	inputAddkey(KEY_GDOWN, -1, 0x11, ih(chgPlyp))
+	inputAddkey(KEY_PAD5, 0, 0x11, ih(chgPlyp))
+	inputAddkey(KEY_SHIFT|keyLShift, 7, 0x11, ih(parsePlayin))          // jump, as j
+	inputAddkey(KEY_SHIFT|KEY_CTRL|keyLShift, 6, 0x11, ih(parsePlayin)) // standing long jump, as J
+	// its rune keys
+	for c := 'a'; c <= 'y'; c++ {
+		inputAddkey(KEY_CTRL|KEY_ALT|int(c), int(c), 0x11, ih(keyRune))
+	}
+	inputAddkey(KEY_CTRL|KEY_ALT|KEY_BACKSPACE, KEY_BACKSPACE, 0x11, ih(keyRune))
+	inputAddkey(KEY_CTRL|KEY_ALT|' ', ' ', 0x11, ih(keyRune))
 	inputAddkey('j', 7, 0x1B, ih(parsePlayin))
 	inputAddkey('J', 6, 0x1B, ih(parsePlayin))
 	inputAddkey(KEY_F7, 0, 0x1B, ih(pullChain))
@@ -96,9 +118,6 @@ func initPlayer() {
 	inputAddkey(KEY_F4, 2, 1, ih(dealWithIcons))
 	inputAddkey(KEY_F5, 1, 1, ih(dealWithIcons))
 	inputAddkey(KEY_F6, 0, 1, ih(dealWithIcons))
-	inputAddkey('p', 9, 1, ih(playerAttack))
-	inputAddkey('.', 3, 1, ih(playerAttack))
-	inputAddkey(';', 6, 1, ih(playerAttack))
 	for _, k := range []int{KEY_SHIFT | KEY_BACKTAB, '\t', KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT,
 		KEY_HOME, KEY_PGUP, KEY_END, KEY_PGDN, KEY_INS, KEY_DEL} {
 		inputAddkey(k, k, 7, ih(keyboardMouse))
@@ -148,6 +167,7 @@ func reportLoc() {
 func showVersion() {
 	gameSprint(0x113)
 	scrollPrint("F1.94S\n")
+	scrollPrint("with UltimaHacks by John Glassmyer\n")
 }
 
 func homeCam(index int) {
@@ -303,11 +323,15 @@ func rollView(step int) {
 
 func chgPlyp(step int) {
 	if MoveCamera {
-		chgPlys(&camang[1], step, 0x1000)
+		chgPlys(&camang[1], step, pitchBound())
 	} else {
-		chgPlys(&PlayerPitch, step, 0x1000)
+		chgPlys(&PlayerPitch, step, pitchBound())
 	}
 }
+
+// pitchBound is the pitch's bound either way: three times the original's 0x1000 (UltimaHacks'
+// pitchBound). Mouse-look keeps to it too.
+func pitchBound() int { return 0x3000 }
 
 // usNull is UsPtr == 0: the view on the roaming camera.
 func usNull() bool { return UsPtr == nil && usPseudo == 0 }

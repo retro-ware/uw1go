@@ -107,6 +107,9 @@ func grPutlab(lab int) {
 // SetPnt appends a do_minires point record (x, y a grid cell, z a tile height) and
 // returns the point's number.
 func SetPnt(x, y, z int) int {
+	if drawingBehind { // wide-pitch's back pass: turned back into the forward frame
+		x, y = 33-x, 1-y
+	}
 	dbw(0xB6)
 	dbw(int(uint8(x-0x10)<<3) | int(uint8(y)<<3)<<8)
 	dbw(int(uint8(z)<<1) | int(uint8(ptnuminq))<<8)

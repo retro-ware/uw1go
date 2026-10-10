@@ -44,14 +44,6 @@ func menuCycle() {
 	}
 }
 
-func doIntroScene(intro bool) {
-	if intro {
-		if _, found := getSaveDescs(); found == 0 {
-			runcutscene(0)
-		}
-	}
-}
-
 // drawStartButtons draws the buttons, or the strings when text is given, sel highlighted.
 func drawStartButtons(b []Button, text []string, sel int) {
 	mouseHide()
@@ -92,7 +84,7 @@ func realStart(intro bool) {
 	if found == 0 {
 		n, sel = 3, 1
 	}
-	doIntroScene(intro)
+	// no introduction before the menu (UltimaHacks' skip): the menu still offers it
 	forceMouseCursor(ICON_CURSORS)
 	mouseShow()
 	done := false
@@ -257,10 +249,11 @@ func parseStartInput(b []Button, text []string, sel int) int {
 		case KEY_ALT | 'x':
 			result = -1
 		}
-		if cur < 0 {
-			cur = 0
-		} else if cur >= n {
+		switch {
+		case n > 0 && cur < 0: // the cursor wraps round
 			cur = n - 1
+		case n > 0 && cur >= n:
+			cur = 0
 		}
 	}
 	return result
