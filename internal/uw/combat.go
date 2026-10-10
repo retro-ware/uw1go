@@ -274,14 +274,11 @@ func doDamage(typ int) {
 	}
 	if item>>6 == MAJOR_CREATURE {
 		if fromwho == 1 {
-			fx := 0
-			if cr.Avghit != 0 {
-				fx = int(def.HP) * 3 / int(cr.Avghit)
+			hp := int(def.HP)
+			if result {
+				hp = 0
 			}
-			if fx >= 3 {
-				fx = 2
-			}
-			setScreenFrame(7, 3-fx)
+			showEnemyHealth(hp, int(cr.Avghit))
 		}
 		if cr.Blood() != 0 {
 			putEffect(def, 0, 1, level, hitzTab[hitloc], targx, targy)

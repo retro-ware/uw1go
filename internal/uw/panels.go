@@ -180,6 +180,7 @@ var updOldTime byte
 
 // updateScreen steps the display elements whose redraw bits are set.
 func updateScreen() {
+	hideEnemyHealth()
 	now := byte(GameTime())
 	did := false
 	if nowAdjust != 0 {

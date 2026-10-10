@@ -106,6 +106,7 @@ func hudStart() {
 	gr.ClearHUD()
 	loadHUD()
 	eyeState = -1
+	healthOn = false
 	drawGargoyle()
 	panelShown = lookOn // so that showPanel draws it or hides it
 	showPanel(!lookOn)
@@ -156,7 +157,7 @@ func loadHUD() {
 		}
 		c := pal[int(a)*3:]
 		want := [3]int{int(c[0]), int(c[1]) * 55 / 100, int(c[2]) / 2}
-		orange[i] = nearestColour(pal[:], want)
+		orange[i] = nearestColour(pal[:], want, 0x40)
 	}
 	eyePics[3] = orange
 
@@ -174,11 +175,14 @@ func loadHUD() {
 	}
 }
 
-// nearestColour is the palette's colour nearest want, of those the palette cycles leave
-// alone.
-func nearestColour(pal []byte, want [3]int) byte {
+// nearestColour is the palette's colour nearest want, from colour from up, of those the
+// palette cycles leave alone.
+func nearestColour(pal []byte, want [3]int, from int) byte {
 	best, bestD := 0, 1<<30
-	for c := 0x40; c < 0x100; c++ {
+	for c := max(from, 1); c < 0x100; c++ {
+		if c >= 0x10 && c < 0x18 || c >= 0x30 && c < 0x40 {
+			continue
+		}
 		d := 0
 		for k := 0; k < 3; k++ {
 			e := int(pal[c*3+k]) - want[k]
@@ -462,4 +466,67 @@ func panelCorners() {
 		}
 	}
 	gr.RefreshRect(panelX, panelY, panelW, panelH)
+}
+
+// The enemy's health: a bar under the gargoyle, centred, after each blow the player lands on
+// a creature. It narrows to its middle, outline and all, as the creature's hit points fall,
+// green above two thirds of its average, orange above a third and red below (DOS's three eye
+// flashes), and goes after healthShow.
+const (
+	healthW, healthH = 0x40, 2 // the inside
+	healthX          = eyesX + 10 + hudShift - healthW/2 - 1
+	healthY          = 0xC7 - gargH - 2
+	healthShow       = 4 * 256 // GameTime's ticks
+)
+
+var (
+	healthCols  [4]byte // outline, green, orange, red
+	healthUntil uint32
+	healthOn    bool
+)
+
+// showEnemyHealth shows hp of most hit points on the bar.
+func showEnemyHealth(hp, most int) {
+	if !hudActive || most <= 0 {
+		return
+	}
+	if healthCols[0] == 0 {
+		var pal [0x300]byte
+		readQuikpal(PAL_GAME, pal[:])
+		for i, want := range [4][3]int{{0, 0, 0}, {8, 48, 8}, {63, 27, 0}, {52, 4, 4}} {
+			healthCols[i] = nearestColour(pal[:], want, 1)
+		}
+	}
+	hp = min(max(hp, 0), most)
+	w := (hp*healthW + most - 1) / most
+	col := healthCols[3]
+	switch {
+	case hp*3 > most*2:
+		col = healthCols[1]
+	case hp*3 > most:
+		col = healthCols[2]
+	}
+	bw, bh := healthW+2, healthH+2
+	pix := make([]byte, bw*bh)
+	keep := make([]bool, bw*bh)
+	x0 := (healthW - w) / 2 // the bar's outline from x0 to x0+w+1
+	for r := 0; r < bh; r++ {
+		for c := x0; c < x0+w+2 && w > 0; c++ {
+			p := healthCols[0]
+			if r > 0 && r <= healthH && c > x0 && c <= x0+w {
+				p = col
+			}
+			pix[r*bw+c], keep[r*bw+c] = p, true
+		}
+	}
+	hudPut(healthX, healthY, bw, bh, pix, keep)
+	healthUntil, healthOn = GameTime()+healthShow, true
+}
+
+// hideEnemyHealth takes the bar off once its time is up.
+func hideEnemyHealth() {
+	if healthOn && int32(GameTime()-healthUntil) >= 0 {
+		healthOn = false
+		hudClear(healthX, healthY, healthW+2, healthH+2)
+	}
 }
