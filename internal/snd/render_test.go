@@ -18,7 +18,7 @@ func TestRender(t *testing.T) {
 		name = "AW01.XMI"
 	}
 	xmi, _ := os.ReadFile("../../gamedata/UW/SOUND/" + name)
-	drv = newDriver(false)
+	drv = &driver{b: newFM(false), installed: map[int]bool{}}
 	h := RegisterSequence(xmi)
 	if h < 0 {
 		t.Fatal("not a sequence")
@@ -35,7 +35,13 @@ func TestRender(t *testing.T) {
 	}
 	StartSequence(h)
 	SetRelativeVolume(h, 0x60, 0)
-	secs := 20
+	pcm := renderSecs(t, 20)
+	if out := os.Getenv("UW1GO_WAV"); out != "" {
+		writeWAV(out, pcm)
+	}
+}
+
+func renderSecs(t *testing.T, secs int) []byte {
 	pcm := make([]byte, secs*outRate*4)
 	for s := 0; s < secs; s++ {
 		stream{}.Read(pcm[s*outRate*4 : (s+1)*outRate*4])
@@ -48,29 +54,32 @@ func TestRender(t *testing.T) {
 				peak = v
 			}
 		}
-		t.Logf("sec %2d rms %6.0f peak %5d status %d", s, math.Sqrt(sum/outRate), peak, drv.seqs[h].status)
+		t.Logf("sec %2d rms %6.0f peak %5d", s, math.Sqrt(sum/outRate), peak)
 	}
-	if out := os.Getenv("UW1GO_WAV"); out != "" {
-		hdr := make([]byte, 44)
-		copy(hdr, "RIFF")
-		binary.LittleEndian.PutUint32(hdr[4:], uint32(36+len(pcm)))
-		copy(hdr[8:], "WAVEfmt ")
-		binary.LittleEndian.PutUint32(hdr[16:], 16)
-		binary.LittleEndian.PutUint16(hdr[20:], 1)
-		binary.LittleEndian.PutUint16(hdr[22:], 2)
-		binary.LittleEndian.PutUint32(hdr[24:], outRate)
-		binary.LittleEndian.PutUint32(hdr[28:], outRate*4)
-		binary.LittleEndian.PutUint16(hdr[32:], 4)
-		binary.LittleEndian.PutUint16(hdr[34:], 16)
-		copy(hdr[36:], "data")
-		binary.LittleEndian.PutUint32(hdr[40:], uint32(len(pcm)))
-		os.WriteFile(out, append(hdr, pcm...), 0o644)
-	}
+	return pcm
+}
+
+func writeWAV(out string, pcm []byte) {
+	hdr := make([]byte, 44)
+	copy(hdr, "RIFF")
+	binary.LittleEndian.PutUint32(hdr[4:], uint32(36+len(pcm)))
+	copy(hdr[8:], "WAVEfmt ")
+	binary.LittleEndian.PutUint32(hdr[16:], 16)
+	binary.LittleEndian.PutUint16(hdr[20:], 1)
+	binary.LittleEndian.PutUint16(hdr[22:], 2)
+	binary.LittleEndian.PutUint32(hdr[24:], outRate)
+	binary.LittleEndian.PutUint32(hdr[28:], outRate*4)
+	binary.LittleEndian.PutUint16(hdr[32:], 4)
+	binary.LittleEndian.PutUint16(hdr[34:], 16)
+	copy(hdr[36:], "data")
+	binary.LittleEndian.PutUint32(hdr[40:], uint32(len(pcm)))
+	os.WriteFile(out, append(hdr, pcm...), 0o644)
 }
 
 // TestPitch plays A4 on a plain sine timbre and counts zero crossings.
 func TestPitch(t *testing.T) {
-	drv = newDriver(false)
+	fm := newFM(false)
+	drv = &driver{b: fm, installed: map[int]bool{}}
 	// mult 1, sustained; no modulation (modulator silent, FM connection), carrier full level
 	tim := []byte{14, 0, 0, 0x21, 0x3F, 0xF0, 0x0F, 0, 0, 0x21, 0x00, 0xF0, 0x0F, 0}
 	InstallTimbre(0, 5, tim)
@@ -79,7 +88,7 @@ func TestPitch(t *testing.T) {
 	var prev, cross int
 	n := oplRate
 	for i := 0; i < n; i++ {
-		l, _ := drv.render()
+		l, _ := fm.sample()
 		if i > 1000 && (prev < 0) != (l < 0) {
 			cross++
 		}

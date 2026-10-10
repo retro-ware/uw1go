@@ -17,8 +17,9 @@ import (
 //
 // The AIL drivers are internal/snd: an emulated OPL2 with AIL's XMIDI driver on it.
 // Cards 2 to 5 (AdLib, Sound Blaster, SB Pro, PAS FM) play through it, 4 and 5 in stereo;
-// the MT-32 (6) is not emulated, so it gets the AdLib themes and timbres; the PC speaker
-// (1) is not emulated either: as on DOS it has no music, and its effects stay silent.
+// the MT-32 (6) is munt's emulation, given its ROMs in UW1GO_MT32_ROMS (default ./roms),
+// and falls back to the AdLib themes and timbres without them; the PC speaker (1) is not
+// emulated: as on DOS it has no music, and its effects stay silent.
 // The driver files the original loads (SOUND\*.ADV) must still be there. The card numbers
 // come from DATA\UW.CFG; UW1GO_SOUND and UW1GO_SPEECH override them (the shipped UW.CFG
 // says no card). The game clock is the host's (initTimers), the 16 Hz effects timer runs
@@ -47,7 +48,8 @@ var (
 	curmusic, newmusic int
 	themeChanged       uint32
 	xmiSequence        = -1
-	timbreAD           []byte // the timbre library, SOUND\UW.AD
+	timbreLib          []byte // the timbre library, SOUND\UW.AD or UW.MT
+	mt32               bool   // the MT-32 is emulated (munt)
 
 	mSettings, speechCfg  [3]int
 	soundCard, speechCard int
@@ -92,7 +94,20 @@ func initSounds() {
 		if !fileExists("SOUND\\" + musicDrivers[soundCard]) {
 			goto fail
 		}
-		snd.Startup(soundCard == CARD_SBPFM || soundCard == CARD_PASFM)
+		if soundCard == CARD_MT32 {
+			dir := os.Getenv("UW1GO_MT32_ROMS")
+			if dir == "" {
+				dir = "roms"
+			}
+			if err := snd.StartupMT32(dir); err != nil {
+				fmt.Println("MT-32:", err, "- using the AdLib emulation")
+				snd.Startup(false)
+			} else {
+				mt32 = true
+			}
+		} else {
+			snd.Startup(soundCard == CARD_SBPFM || soundCard == CARD_PASFM)
+		}
 		musicDriver = soundCard
 		if !initFx() {
 			goto fail
@@ -117,7 +132,7 @@ func initSounds() {
 // loadGlobalTimbre finds bank, patch in the timbre library's directory (6-byte entries:
 // patch, bank, offset, ending at bank 0xFF) and returns the timbre with its length word.
 func loadGlobalTimbre(bank, patch int) []byte {
-	lib := timbreAD
+	lib := timbreLib
 	for i := 0; i+6 <= len(lib); i += 6 {
 		if lib[i+1] == 0xFF {
 			return nil
@@ -137,14 +152,23 @@ func loadGlobalTimbre(bank, patch int) []byte {
 	return nil
 }
 
-// initTimbres reads SOUND\UW.AD (UW.<data suffix>; the MT-32's UW.MT is not used, see
-// above).
+// initTimbres reads the timbre library SOUND\UW.AD, or UW.MT on the MT-32, where every
+// effect's timbre (bank 1) is installed at once.
 func initTimbres() bool {
-	timbreAD = readFile("SOUND\\uw.ad")
-	if timbreAD == nil {
+	if mt32 {
+		timbreLib = readFile("SOUND\\uw.mt")
+	} else {
+		timbreLib = readFile("SOUND\\uw.ad")
+	}
+	if timbreLib == nil {
 		musicOn = false
 		musicOK = false
 		return false
+	}
+	if mt32 {
+		for i := 0; i < numeffects; i++ {
+			installTimbre(1, i)
+		}
 	}
 	return true
 }
@@ -165,7 +189,10 @@ func loadNewMusic(music int, start bool) bool {
 		return false
 	}
 	if music != curmusic {
-		name := []byte("aw00.xmi")
+		name := []byte("uw00.xmi")
+		if !mt32 {
+			name[0] = 'a'
+		}
 		name[2] = byte(music>>3) + '0'
 		name[3] = byte(music&7) + '0'
 		b := readFile("SOUND\\" + string(name))
