@@ -21,7 +21,7 @@ UW.EXE, as underworld-exhumed has it.
 - The game starts at the main menu, without the title sequence or the introduction (the menu still offers it), and the menu's cursor wraps around.
 - Textures are mapped perspective-correct (`internal/r3d/persp.go`, after SiENcE's uwpatch), so walls no longer bend and floors no longer swim.
 - You can look three times as far up and down, and the squares beside and behind you are drawn too. Creatures and objects keep their size when the view pitches.
-- Mouse look: `` ` `` turns it on and off. While it is on, the mouse turns the view and the cursor stays in the middle as a crosshair. `` Alt+` `` cycles through the axis inversions. `UW1GO_LOOK_SPEED` sets its speed in percent (10 to 400, default 100).
+- Mouse look: `` ` `` turns it on and off (on ISO keyboards also the extra key beside the left `Shift`, which on a Mac is the key left of `1`, `^` on a German one). While it is on, the mouse turns the view and the cursor stays in the middle as a crosshair. `` Alt+` `` cycles through the axis inversions. `UW1GO_LOOK_SPEED` sets its speed in percent (10 to 400, default 100).
 - Sliding along a wall no longer turns the view, and the right-hand panel slides twice as fast.
 - `F1`, `?` or `Ctrl+H` shows a help screen with the controls and every key (three pages: `Space` or a click turns on, `Esc` or the CLOSE scroll returns). `Esc` opens the options panel, which `F1` did in DOS.
 - The keys are UltimaHacks':
