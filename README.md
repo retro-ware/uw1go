@@ -23,29 +23,29 @@ UW.EXE, as underworld-exhumed has it.
 - The game starts at the main menu, without the title sequence or the introduction (the menu still offers it), and the menu's cursor wraps around.
 - Textures are mapped perspective-correct (the idea from SiENcE's uwpatch), so walls no longer bend and floors no longer swim.
 - You can look three times as far up and down, and the squares beside and behind you are drawn too. Creatures and objects keep their size when the view pitches.
-- Mouse look is on from the start; `` ` `` turns it off and on (on ISO keyboards also the extra key beside the left `Shift`, which on a Mac is the key left of `1`, `^` on a German one). While it is on, the mouse turns the view and the cursor stays in the middle as a crosshair. A take goes straight into the pack (onto a matching stack first), as the crosshair cannot drag; with the pack full it stays carried. `` Alt+` `` cycles through the axis inversions. `UW1GO_LOOK_SPEED` sets its speed in percent (10 to 400, default 100).
+- Mouse look is on from the start; `V` turns it off and on. While it is on, the mouse turns the view and the cursor stays in the middle as a crosshair. A take goes straight into the pack (onto a matching stack first), as the crosshair cannot drag; with the pack full it stays carried. `Alt+V` cycles through the axis inversions. `UW1GO_LOOK_SPEED` sets its speed in percent (10 to 400, default 100).
 - Movement is Quake-like: the keys held add up, so `W` with `A` or `D` goes diagonally (no faster than straight), sliding and backing up go most of running speed instead of a quarter, and speeding up and stopping take a tenth of a second at any frame rate. In a browser, a click takes the pointer back after `Esc` lets it go.
 - Sliding along a wall no longer turns the view, and the right-hand panel slides twice as fast.
-- The mouse acts and the keys walk. The turn and step buttons under the view are only pictures. A left click in the view talks to a creature, takes an item in reach, and looks at anything else. A right click uses: it opens doors and chests, pulls levers, presses buttons. While something is carried, a left click in the view drops or throws it. Of the icons on the left only the sword (as `F5`) and the options still work: talk, get, look and use come from the click and `Q` `E`, with no modes.
-- `F5` draws the weapon or puts it away. While it is drawn the left button slashes, the right thrusts and `Space` bashes; hold one to charge the blow and let go to strike; a quick click strikes at once, at the weakest.
+- The mouse acts and the keys walk. The turn and step buttons under the view are only pictures. A left click in the view talks to a creature, takes an item in reach, and looks at anything else. A right click uses: it opens doors and chests, pulls levers, presses buttons. While something is carried, a left click in the view drops or throws it. Of the icons on the left only the sword (as `Tab`) and the options still work: talk, get, look and use come from the click and `Q` `E`, with no modes.
+- `Tab` draws the weapon or puts it away. While it is drawn the left button slashes, the right thrusts and `Space` bashes; hold one to charge the blow and let go to strike; a quick click strikes at once, at the weakest.
 - Looking at gear shows its stats after Angband: a weapon's damage by attack type, (slash/bash/thrust); the damage of a shot, (n), on ammunition and on the launcher that fires it, before the missile skill scales it; armour's protection at its quality, [n]. An identified enchantment adds (+accuracy,+damage) to a weapon and [n,+toughness] to armour, or (+n) for Protection, which makes the wearer harder to hit: "a longsword of Additional Damage (10/4/8) (+0,+3)", "a bow (8)", "a breastplate [4,+4]".
 - `F1`, `?` or `Ctrl+H` shows a help screen with the controls and every key (three pages: `Space` or a click turns on, `Esc` or the CLOSE scroll returns). `Esc` opens the options panel, which `F1` did in DOS.
 - The keys are UltimaHacks':
 
 | Keys | Action |
 | --- | --- |
-| `W` `S` | walk forward, back; tap the left `Shift` while moving to run until you stop |
-| `A` `D` | slide left, right |
-| `←` `→` | turn |
-| left `Shift` / `Ctrl` | fly up / down (while flying) |
-| `1` `3` / `↑` `↓`, `2` | look up, down, straight ahead |
-| `Space` | jump; held while standing still the knees bend, and let go from the full crouch (0.3 s) it is a standing long jump; with the weapon drawn bash (hold to charge) |
-| `C` | crouch while held: half as tall and half the walking speed, under anything that low; let go where there is no room and you stay down until there is |
+| `W` `A` `S` `D` | walking (forward, slide left, back, slide right); the mouse turns; tap the left `Shift` while moving to run until you stop |
+| `Space` | jump; held while standing still the knees bend, and let go from the full crouch (0.3 s) it is a standing long jump; with the weapon drawn bash (hold to charge); while flying, fly up |
+| `C` | crouch while held: half as tall and half the walking speed, under anything that low; let go where there is no room and you stay down until there is; while flying, fly down |
 | `Q` / `E` | look at / use what is under the cursor (`E` as a right click) |
-| `R` / `F` | the rune bag / statistics panel (again: back to the inventory) |
-| `V` `B` | scroll the inventory down, up |
+| `R` / `K` | the rune bag / statistics panel (again: back to the inventory) |
+| `V` | mouse look on, off |
+| `B` | scroll the inventory up |
+| `F` | cast the spell on the shelf |
+| `Tab` | draw, sheathe the weapon |
 | `G` / `H` | game info / both flasks |
-| `Z` | the map; there `S` `W` go a level up, down and `C` back to the player's |
+| `M` | the map; there `S` `W` go a level up, down and `C` back to the player's |
+| `F5` / `F7` | quick save / quick load |
 | `Ctrl+Alt+letter` | put that rune on the shelf; `Ctrl+Alt+Backspace` clears the shelf, `Ctrl+Alt+Space` casts |
 
 ## Running

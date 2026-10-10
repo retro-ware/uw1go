@@ -24,11 +24,11 @@ var (
 	MoveBack    bool  // the back key held with PIN_FORWARD
 
 	moveKeys = [8]byte{0x11, 0x1E, 0x20, 0x2C, 0x2E, 0x2D, 0x12, 0x10}
-	// UltimaHacks' movementKeys, the key held for each of moveKeys' meanings (forward, turn
-	// left, turn right, slide left, slide right, back, fly up, fly down): w, the grey Left and
-	// Right (0x69 and 0x6A in keyOn: KEY puts E0 keys at 0x60 and up), a, d, s, left Shift,
-	// left Ctrl. UltimaHacks' x, walk, is gone: w walks, and runs once Shift is tapped.
-	modernKeys = [8]byte{0x11, 0x69, 0x6A, 0x1E, 0x20, 0x1F, 0x2A, 0x1D}
+	// the key held for each of moveKeys' meanings (forward, turn left, turn right, slide
+	// left, slide right, back, fly up, fly down): w, none (0: the mouse turns), a, d, s,
+	// Space and C (jump and crouch fly up and down while flying or levitating). w walks,
+	// and runs once Shift is tapped.
+	modernKeys = [8]byte{0x11, 0, 0, 0x1E, 0x20, 0x1F, 0x39, 0x2E}
 	// Running: a tap of Shift while moving makes every direction run until the player stops
 	// (no movement key held and at rest); w alone walks.
 	Running bool
@@ -76,7 +76,7 @@ func parsePlayin(command int) {
 }
 
 // doPlayerKeyboard reads the movement keys held down (UltimaHacks' keys, modernKeys), with
-// Shift or Ctrl held too (its fly keys) but not with both Alt and Ctrl (the rune keys).
+// not with both Alt and Ctrl held (the rune keys).
 // Running, walking, backing, sliding and turning add up into one PIN_FORWARD, which
 // doPlayerInput turns into a direction, where the game took the last key alone: a slide
 // stopped a run, so there was no diagonal.
@@ -86,7 +86,7 @@ func doPlayerKeyboard() {
 		return
 	}
 	for i, k := range moveKeys {
-		if keyOn[modernKeys[i]] == 0 {
+		if modernKeys[i] == 0 || keyOn[modernKeys[i]] == 0 {
 			continue
 		}
 		switch k {
@@ -109,7 +109,7 @@ func doPlayerKeyboard() {
 		switch {
 		case k != 0x12 && k != 0x10:
 			PlayerInput = PIN_FORWARD
-		case motionbits&(MB_LEVITATE|MB_FLY) == 0: // UltimaHacks' fly keys do nothing on the ground
+		case !flying(): // Space and C jump and crouch on the ground (keySpace, crouchStep)
 		case k == 0x12:
 			PlayerInput = PIN_UP
 		default:
@@ -123,6 +123,9 @@ func doPlayerKeyboard() {
 		Running = false
 	}
 }
+
+// flying is whether the player flies or levitates, when Space and C fly up and down.
+func flying() bool { return motionbits&(MB_LEVITATE|MB_FLY) != 0 }
 
 // shiftTap is a lone tap of the left Shift: while moving it starts running (Space jumps).
 func shiftTap() {
@@ -223,6 +226,9 @@ func atRest() bool { return PN.Speed == 0 && PN.Vel[2] == 0 && PN.Acc[2] == 0 }
 // spaceJump is Space without a weapon drawn: moving or in the air it jumps at once, keeping
 // the motion; at rest it starts the crouch, which movePhysics ends when Space is let go.
 func spaceJump() {
+	if flying() { // Space flies up instead (doPlayerKeyboard)
+		return
+	}
 	if !atRest() {
 		parsePlayin(PIN_JUMP)
 		return
@@ -485,7 +491,7 @@ var lastDrop int // the eye's drop last round, to redraw only while it changes
 // crouchStep crouches while C is held and stands up once it is let go and there is room,
 // then eases the eye toward the crouch or back.
 func crouchStep(incr int) {
-	if keyOn[0x2E] != 0 {
+	if keyOn[0x2E] != 0 && !flying() { // flying, C flies down instead
 		Crouched = true
 	} else if Crouched && playerFits(ComObjData[ThePlayer.Item()].Height()) {
 		Crouched = false

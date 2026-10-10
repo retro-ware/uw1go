@@ -64,24 +64,18 @@ func initPlayer() {
 	}
 	// the original's letter keys (w s a d z c x e q, W A S D X) are UltimaHacks' below
 	// the turn and step buttons under the view are art only: the mouse never walks
-	inputAddkey('2', 0, 0x11, ih(chgPlyp))
-	inputAddkey('`', 0, 0x11, func(any) { mouseLookToggle() })
-	inputAddkey(KEY_ALT|'`', 0, 0x11, func(any) { mouseLookOrient() })
+	inputAddkey('v', 0, 0x11, func(any) { mouseLookToggle() })
+	inputAddkey(KEY_ALT|'v', 0, 0x11, func(any) { mouseLookOrient() })
 	// UltimaHacks' keys (keys.go), its input-mode masks
 	inputAddkey(' ', 0, 1, func(any) { keySpace() })
 	inputAddkey('r', 1, 1, ih(keyPanel))
-	inputAddkey('f', 2, 1, ih(keyPanel))
+	inputAddkey('k', 2, 1, ih(keyPanel))
 	inputAddkey('q', 0, 1, ih(keyInteract))
 	inputAddkey('e', 1, 1, ih(keyInteract))
-	inputAddkey('z', 0, 1, func(any) { newscr(2) })
-	inputAddkey('v', 1, 1, ih(keyBag))
+	inputAddkey('m', 0, 1, func(any) { newscr(2) })
 	inputAddkey('b', 2, 1, ih(keyBag))
 	inputAddkey('g', 0, 1, func(any) { printInfo() })
 	inputAddkey('h', 0, 1, func(any) { keyFlasks() })
-	inputAddkey('1', 1, 0x11, ih(chgPlyp))
-	inputAddkey(KEY_GUP, 1, 0x11, ih(chgPlyp))
-	inputAddkey('3', -1, 0x11, ih(chgPlyp))
-	inputAddkey(KEY_GDOWN, -1, 0x11, ih(chgPlyp))
 	inputAddkey(KEY_SHIFT|keyLShift, 0, 0x11, func(any) { shiftTap() }) // run
 	// its rune keys
 	for c := 'a'; c <= 'y'; c++ {
@@ -91,19 +85,18 @@ func initPlayer() {
 	inputAddkey(KEY_CTRL|KEY_ALT|' ', ' ', 0x11, ih(keyRune))
 	inputAddkey('j', 7, 0x1B, ih(parsePlayin))
 	inputAddkey('J', 6, 0x1B, ih(parsePlayin))
-	inputAddkey(KEY_F7, 0, 0x1B, ih(pullChain))
+	inputAddkey(KEY_F5, 0, 1, func(any) { quickSave() })
+	inputAddkey(KEY_F7, 0, 1, func(any) { quickLoad() })
 	inputAddkey(KEY_F10, 0, 0x1B, ih(playerKeySleep))
 	inputAddkey(KEY_F9, 2, 0x1B, ih(func(n int) { playerUseSkill(n) }))
-	inputAddkey(KEY_F8, 1, 0x1B, ih(tryCast))
+	inputAddkey('f', 1, 0x1B, ih(tryCast))
 	for _, c := range "srmfq" {
 		k := KEY_CTRL | int(c)
 		inputAddkey(k, k, 1, ih(doOptionShortcut))
 	}
-	helpKeys() // F1 opens the help (help.go), Esc the options panel
-	inputAddkey(KEY_F5, 1, 1, ih(dealWithIcons))
-	for _, k := range []int{KEY_SHIFT | KEY_BACKTAB, '\t'} {
-		inputAddkey(k, k, 7, ih(keyboardMouse))
-	}
+	helpKeys()                                 // F1 opens the help (help.go), Esc the options panel
+	inputAddkey('\t', 1, 1, ih(dealWithIcons)) // draw, sheathe the weapon
+	inputAddkey(KEY_SHIFT|KEY_BACKTAB, KEY_SHIFT|KEY_BACKTAB, 7, ih(keyboardMouse))
 	inputAddkey(KEY_ESC, 4, 4, ih(doEscapeKey))
 	for i := 1; i <= 4; i++ {
 		inputAddkey('0'+i, i, 4, ih(convPlayMenu))
