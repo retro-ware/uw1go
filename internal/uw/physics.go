@@ -9,9 +9,9 @@ package uw
 // 4 levitating, 5 flying, 6 slow falling. motionbits holds the motion spells (MB_*).
 
 var (
-	pTurn          int16    // the turn rate for the current motion state
-	GrSq           int = -1 // the player's tile, as an index into the level's tiles
-	pFPS           [3]int16 // forward, side and backward speeds
+	pTurn          int16         // the turn rate for the current motion state
+	GrSq           int      = -1 // the player's tile, as an index into the level's tiles
+	pFPS           [3]int16      // forward, side and backward speeds
 	lastTerr       int16
 	MaxPlayerAccel int16 = 0x60
 	BackFPS        int16 = 0xBC
@@ -111,6 +111,7 @@ func etherealVoidSpecialEffects() {
 
 // playerChangeSq moves the player object to the tile under PN when it changed.
 func playerChangeSq() {
+	dprintf("player %#x,%#x z %#x terr %#x\n", PN.X, PN.Y, PN.Z, PN.Terrain)
 	if sq := int(PN.X>>8) + int(PN.Y>>8)<<6; sq != GrSq {
 		if GrSq != -1 {
 			ObjRem(&Level.Tiles[GrSq].Objects, ThePlayer)

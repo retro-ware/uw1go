@@ -74,9 +74,9 @@ var (
 
 func DisplayToSlot() []byte { return SlotToDisplay[NUM_INV_SLOTS:] }
 
-func valloc(w, h int) int            { return gr.Valloc(w, h) }
-func saveRect(hd, x, y, w, h int)    { gr.SaveRect(hd, x, y, w, h) }
-func restoreRect(hd int)             { gr.RestoreRect(hd) }
+func valloc(w, h int) int         { return gr.Valloc(w, h) }
+func saveRect(hd, x, y, w, h int) { gr.SaveRect(hd, x, y, w, h) }
+func restoreRect(hd int)          { gr.RestoreRect(hd) }
 
 // loadInventoryPix loads the paperdoll body picture and forgets the armour pictures.
 func loadInventoryPix() {

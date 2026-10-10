@@ -281,3 +281,11 @@ func strAtoi(s string) int {
 	}
 	return n
 }
+
+// stringExists says whether STRINGS.PAK's block has a string with this id (get_string
+// returning a pointer, empty or not, rather than 0).
+func stringExists(id int) bool {
+	block, str := int(uint16(id))>>9, id&0x1FF
+	off, ok := strBlockTable[block]
+	return ok && off+2 <= len(stringsPak) && str < int(int16(le16(stringsPak, off)))
+}

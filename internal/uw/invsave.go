@@ -25,9 +25,9 @@ func wsSetSlot(i int, l Link) { put16(saveBuf, wsSlots+i*2, uint16(l)) }
 // wsLink is a link word in the workspace, at byte offset off.
 type wsLink int
 
-func (w wsLink) get() Link    { return Link(le16(saveBuf, int(w))) }
-func (w wsLink) set(l Link)   { put16(saveBuf, int(w), uint16(l)) }
-func (w wsLink) index() int   { return w.get().Index() }
+func (w wsLink) get() Link  { return Link(le16(saveBuf, int(w))) }
+func (w wsLink) set(l Link) { put16(saveBuf, int(w), uint16(l)) }
+func (w wsLink) index() int { return w.get().Index() }
 func (w wsLink) setIndex(i int) {
 	l := w.get()
 	l.SetIndex(i)

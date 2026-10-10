@@ -713,3 +713,7 @@ func checkRest() bool {
 	}
 	return true
 }
+
+// MapObjX and MapObjY are the tile of the object being handled (set by InPickRange and
+// the like).
+var MapObjX, MapObjY int

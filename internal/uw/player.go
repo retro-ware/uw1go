@@ -193,6 +193,9 @@ func moveCam(how int) {
 // camera's pseudo-objects of attach_eye's modes 2 and 3, kept in usPseudo.
 var usPseudo int
 
+// curelem is the editor's current object (data in the EXE that nothing in the game sets).
+var curelem *Object
+
 // attachEye chooses what the view is attached to.
 func attachEye(mode int) {
 	switch mode {

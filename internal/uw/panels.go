@@ -16,27 +16,27 @@ var (
 	flipWidthNow, pnlWide, pnlSkew                int
 
 	// RightPanel is the panel showing on the right (PANEL_*, PANEL_TURNING while turning).
-	RightPanel                         int
-	slowAdjust, fastAdjust, nowAdjust  int
-	dstate, dspr                       [2]int
-	weapid, lastWeap                   = -1, -1
-	wlstate                            = WEAP_SHEATHED
-	weapFrame                          = -1
-	wxo, wfo                           = 0, 1
-	flX                                = [2]int{0xF8, 0x11C}
-	liquidY                            = [14]int{0x2C, 0x30, 0x32, 0x34, 0x36, 0x38, 0x3A, 0x3B, 0x3C, 0x3D, 0x3F, 0x41, 0x43, 0x45}
-	liquidH                            = [14]int{0, 4, 5, 6, 7, 7, 7, 7, 6, 5, 4, 4, 4, 4}
-	bubbling, swishing                 [2]byte
-	nedlX                              = [16]int{0x88, 0x80, 0x78, 0x74, 0x70, 0x70, 0x74, 0x7C, 0x88, 0x90, 0x9C, 0xA0, 0xA0, 0x9C, 0x98, 0x90}
-	nedlY                              = [16]int{0x44, 0x42, 0x41, 0x3E, 0x3A, 0x36, 0x34, 0x31, 0x2F, 0x31, 0x34, 0x36, 0x3A, 0x3E, 0x41, 0x42}
-	dpart1X                            = [2]int{0x24, 0xE4}
-	dpart2X                            = [2]int{0x24, 0xCC}
-	danimX                             = [2][3]int{{0x28, 0x30, 0x24}, {0xCC, 0xCC, 0xC8}}
-	danimY                             = [2][3]int{{0x2C, 0x36, 0x36}, {0x2C, 0x36, 0x36}}
-	danimW                             = [2][3]int{{0x21, 0x18, 0x25}, {0x22, 0x18, 0x26}}
-	danimH                             = [2][3]int{{0x0E, 0x10, 0x17}, {0x0E, 0x10, 0x17}}
-	dtailX                             = [2]int{0x28, 0xE0}
-	dtailSeq                           = [2][7]int{
+	RightPanel                        int
+	slowAdjust, fastAdjust, nowAdjust int
+	dstate, dspr                      [2]int
+	weapid, lastWeap                  = -1, -1
+	wlstate                           = WEAP_SHEATHED
+	weapFrame                         = -1
+	wxo, wfo                          = 0, 1
+	flX                               = [2]int{0xF8, 0x11C}
+	liquidY                           = [14]int{0x2C, 0x30, 0x32, 0x34, 0x36, 0x38, 0x3A, 0x3B, 0x3C, 0x3D, 0x3F, 0x41, 0x43, 0x45}
+	liquidH                           = [14]int{0, 4, 5, 6, 7, 7, 7, 7, 6, 5, 4, 4, 4, 4}
+	bubbling, swishing                [2]byte
+	nedlX                             = [16]int{0x88, 0x80, 0x78, 0x74, 0x70, 0x70, 0x74, 0x7C, 0x88, 0x90, 0x9C, 0xA0, 0xA0, 0x9C, 0x98, 0x90}
+	nedlY                             = [16]int{0x44, 0x42, 0x41, 0x3E, 0x3A, 0x36, 0x34, 0x31, 0x2F, 0x31, 0x34, 0x36, 0x3A, 0x3E, 0x41, 0x42}
+	dpart1X                           = [2]int{0x24, 0xE4}
+	dpart2X                           = [2]int{0x24, 0xCC}
+	danimX                            = [2][3]int{{0x28, 0x30, 0x24}, {0xCC, 0xCC, 0xC8}}
+	danimY                            = [2][3]int{{0x2C, 0x36, 0x36}, {0x2C, 0x36, 0x36}}
+	danimW                            = [2][3]int{{0x21, 0x18, 0x25}, {0x22, 0x18, 0x26}}
+	danimH                            = [2][3]int{{0x0E, 0x10, 0x17}, {0x0E, 0x10, 0x17}}
+	dtailX                            = [2]int{0x28, 0xE0}
+	dtailSeq                          = [2][7]int{
 		{ICON_DRAGONS + 0xE, ICON_DRAGONS + 0xF, ICON_DRAGONS + 0x10, ICON_DRAGONS + 0x11, ICON_DRAGONS + 0x10, ICON_DRAGONS + 0xF, ICON_DRAGONS + 0xE},
 		{ICON_DRAGONS + 0x20, ICON_DRAGONS + 0x21, ICON_DRAGONS + 0x22, ICON_DRAGONS + 0x23, ICON_DRAGONS + 0x22, ICON_DRAGONS + 0x21, ICON_DRAGONS + 0x20},
 	}
@@ -46,20 +46,20 @@ var (
 	flipWpct  = [8]int{0x64, 0x5C, 0x47, 0x26, 0x00, 0x26, 0x47, 0x5C}
 	// The turning panel's pictures (EMS handles in the original): 0 the old panel and,
 	// at 0x2800, the edge; 1 the new panel; 2 the work buffer.
-	flipBuf                         [3][]byte
-	pbufFrame                       int
-	pbufFlag                        bool
-	flipFlags                       = 1
-	eyesSeq                         = [5]int{ICON_EYES + 1, ICON_EYES + 2, ICON_EYES + 3, ICON_EYES + 2, ICON_EYES + 1}
-	eyes, eyesFrame                 int
-	runeX                           = [3]int{0xB0, 0xBF, 0xCE}
-	spellX                          = [3]int{0x56, 0x45, 0x34}
-	panelDispatch                   = [3]func(){RedispInv, RedispRune, RedispStat}
-	level                           [4]int
-	dpart1Spr, dpart2Spr, dtailSpr  [2]int
-	weapPics                        [0x1C][]byte // the weapon's pictures (EMS in the original)
-	ShowStupidFirstPersonWeapon     = true
-	demoMode                        bool
+	flipBuf                        [3][]byte
+	pbufFrame                      int
+	pbufFlag                       bool
+	flipFlags                      = 1
+	eyesSeq                        = [5]int{ICON_EYES + 1, ICON_EYES + 2, ICON_EYES + 3, ICON_EYES + 2, ICON_EYES + 1}
+	eyes, eyesFrame                int
+	runeX                          = [3]int{0xB0, 0xBF, 0xCE}
+	spellX                         = [3]int{0x56, 0x45, 0x34}
+	panelDispatch                  = [3]func(){RedispInv, RedispRune, RedispStat}
+	level                          [4]int
+	dpart1Spr, dpart2Spr, dtailSpr [2]int
+	weapPics                       [0x1C][]byte // the weapon's pictures (EMS in the original)
+	ShowStupidFirstPersonWeapon    = true
+	demoMode                       bool
 )
 
 func adjustElement(i int) {
@@ -375,11 +375,11 @@ func adjustFlasks(f int) {
 }
 
 var (
-	dragFrame  [2]int
-	dragTail   int
-	dragCount  [2]int
-	dragFirst  = [2][3]int{{ICON_DRAGONS + 2, ICON_DRAGONS + 6, ICON_DRAGONS + 0xA}, {ICON_DRAGONS + 0x14, ICON_DRAGONS + 0x18, ICON_DRAGONS + 0x1C}}
-	dragLast   = [2][3]int{{ICON_DRAGONS + 5, ICON_DRAGONS + 9, ICON_DRAGONS + 0xD}, {ICON_DRAGONS + 0x17, ICON_DRAGONS + 0x1B, ICON_DRAGONS + 0x1F}}
+	dragFrame [2]int
+	dragTail  int
+	dragCount [2]int
+	dragFirst = [2][3]int{{ICON_DRAGONS + 2, ICON_DRAGONS + 6, ICON_DRAGONS + 0xA}, {ICON_DRAGONS + 0x14, ICON_DRAGONS + 0x18, ICON_DRAGONS + 0x1C}}
+	dragLast  = [2][3]int{{ICON_DRAGONS + 5, ICON_DRAGONS + 9, ICON_DRAGONS + 0xD}, {ICON_DRAGONS + 0x17, ICON_DRAGONS + 0x1B, ICON_DRAGONS + 0x1F}}
 )
 
 // adjustDragons animates dragon which-4: its tail when swishing, and the animation its
