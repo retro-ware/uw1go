@@ -298,15 +298,25 @@ func doKeyarrayInput() int {
 // keyLShift is the code a lone left Shift gives (UltimaHacks' jump), unused by the game.
 const keyLShift = 0xBF
 
-var lshiftWas bool
+var (
+	lshiftWas   bool
+	lshiftAlone bool // no other key went down while the left Shift was held
+)
 
 func doKeyboardInput(array bool) int {
-	// UltimaHacks binds a press of the left Shift. It has no character, so KEY never gives it;
-	// a new press is seen in keyOn (0x2A, its scan code) and given with the modifiers held.
+	// UltimaHacks binds the left Shift alone. It has no character, so KEY never gives it; its
+	// release is seen in keyOn (0x2A, its scan code) and given with the modifiers held, unless
+	// another key went down meanwhile (Shift+/ is ? and no jump). A release, not a press, so
+	// the key timer does not hold back the keys pressed with it.
 	now := keyOn[0x2A] != 0
-	pressed := now && !lshiftWas
+	if now && !lshiftWas {
+		lshiftAlone = true
+	} else if now && otherKeyDown() {
+		lshiftAlone = false
+	}
+	released := !now && lshiftWas && lshiftAlone
 	lshiftWas = now
-	if pressed {
+	if released {
 		keyTime = GameTime()
 		c := keyLShift | KEY_SHIFT
 		if altDown() {

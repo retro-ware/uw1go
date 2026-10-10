@@ -23,11 +23,12 @@ var (
 )
 
 func init() {
-	editorDispatch = [3][16]func(){
+	editorDispatch = [4][16]func(){
 		{strtDemscr, do3dView, nil, func() { newPlayerPos() }, nil, nil, nil, nil, nil,
 			RedispInv, checkVictory, checkPhysics, displayScr, updateScreen, nil, freeDemscr},
 		{nil, AutoMap, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, automapScr, nil, nil, ExitAutoMap},
 		{strtConverse, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, freeConverse},
+		{nil, HelpScreen, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, helpScr, nil, nil, ExitHelp}, // help.go
 	}
 }
 
@@ -140,6 +141,8 @@ func changeScreen(mode int) {
 		scrnum = 1
 	case 4:
 		scrnum = 2
+	case MODE_HELP:
+		scrnum = 3
 	default:
 		scrnum = 0
 	}

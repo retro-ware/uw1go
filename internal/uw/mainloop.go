@@ -9,8 +9,8 @@ var (
 	pmouseHandled int
 	// editorDispatch and changeState are UWEDIT.C's: per screen, a handler per change bit,
 	// and the bits kept set.
-	editorDispatch [3][16]func()
-	changeState    = [3]int{0x3800, 0x1000, 0}
+	editorDispatch [4][16]func()
+	changeState    = [4]int{0x3800, 0x1000, 0, 0x1000}
 )
 
 func mainloop() {
