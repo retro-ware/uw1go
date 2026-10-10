@@ -18,6 +18,7 @@ import (
 //	m:X:Y        move the pointer to (X, Y), screen pixels from the top left
 //	c:X:Y        move there and click the left button
 //	r:X:Y        the same with the right button
+//	h:X:Y, H     move there and hold the left button down; let it go
 //	q            quit
 //	s:NAME       save the screen as NAME.png in UW1GO_SHOT
 //
@@ -115,6 +116,14 @@ func runScript() bool {
 				}
 				scriptHold = 4
 			}
+		case "h":
+			if len(ev.args) >= 2 {
+				MouseX, MouseY = ev.args[0], ev.args[1]
+				MouseMoved = true
+			}
+			MouseButtons, scriptHold = 1, 0
+		case "H":
+			MouseButtons = 0
 		case "q":
 			scriptQuit = true
 		case "s":

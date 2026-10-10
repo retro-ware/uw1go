@@ -68,7 +68,9 @@ func FBShow(bm []byte, x, y, w, h int) {
 	}
 }
 
-// VCopyFB copies a rectangle of the frame buffer (x, y relative to it) into block hd.
+// VCopyFB copies a rectangle of the frame buffer (x, y relative to it) into block hd. The
+// part past the buffer keeps what the block holds: the pointer straddles the view, and the
+// screen save made where it moved there (mousReSave) has the frame under it, not black.
 func VCopyFB(x, y, w, h, hd int) {
 	b := VBlock(hd)
 	if b == nil || FB == nil {
@@ -81,11 +83,9 @@ func VCopyFB(x, y, w, h, hd int) {
 		ly := y - r
 		for c := 0; c < w; c++ {
 			lx := x + c
-			var v byte
 			if lx >= 0 && lx < FBW && ly >= 0 && ly < FBH {
-				v = FB[(FBH-1-ly)*FBW+lx]
+				b.Pix[r*w+c] = FB[(FBH-1-ly)*FBW+lx]
 			}
-			b.Pix[r*w+c] = v
 		}
 	}
 }
