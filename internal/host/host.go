@@ -84,6 +84,9 @@ func Run(title string, scale int, gameMain func()) error {
 	go func() {
 		<-tick
 		defer func() {
+			if r := recover(); r != nil {
+				crashed(r)
+			}
 			finished.Store(true)
 			yielded <- struct{}{}
 		}()
