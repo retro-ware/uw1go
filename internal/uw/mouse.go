@@ -27,9 +27,7 @@ var (
 	forceDepth     int
 	warpX          = -1
 	calledfrom3d   bool
-	keyIndex       int
 	warpTime       uint32
-	keyTime        uint32
 	mouseFirst     = true
 
 	mCurs        int
@@ -273,29 +271,45 @@ func doMouseInput() int {
 	return b
 }
 
-func doKeyarrayInput() int {
-	if GameTime()-keyTime < 30 {
+// The game screen's keys (array): the game read no key events there but looked at the keys
+// held every 30 ticks, so a tap between two looks was lost and a key held past one came
+// twice, a toggle undone. A press now counts once, from its event; only the keys meant for
+// holding (looking up and down, stepping, scrolling, the pointer keys) repeat while held,
+// after 0x80 ticks (half a second), then every 30 as the looks came.
+var (
+	heldKey  byte // keyOn's index of the repeating key, or 0
+	heldChar int
+	heldNext uint32
+)
+
+func keyRepeats(ch int) bool {
+	switch ch {
+	case '1', '3', 'v', 'b', KEY_GUP, KEY_GDOWN, KEY_GLEFT, KEY_GRIGHT:
+		return true
+	}
+	return ch >= KEY_HOME && ch <= KEY_DEL
+}
+
+// keyArrayInput takes KEY's result (the character, the key in the high byte) and gives the
+// character of a press, or of the held key's repeat, or 0.
+func keyArrayInput(c int) int {
+	now := GameTime()
+	if c&0xFF != 0 {
+		heldKey = 0
+		if keyRepeats(c & 0xFF) {
+			heldKey, heldChar, heldNext = byte(c>>8)&0x7F, c&0xFF, now+0x80
+		}
+		return c & 0xFF
+	}
+	if heldKey == 0 || keyOn[heldKey] == 0 {
+		heldKey = 0
 		return 0
 	}
-	c := 0
-	keyIndex = (keyIndex + 1) & 0x7F
-	start := keyIndex
-	for {
-		if keyOn[keyIndex] != 0 {
-			if shiftDown() {
-				keyIndex |= 0x80
-			}
-			c = int(ascTab[keyIndex])
-			if c != 0 {
-				break
-			}
-		}
-		keyIndex = (keyIndex + 1) & 0x7F
-		if keyIndex == start {
-			break
-		}
+	if now < heldNext {
+		return 0
 	}
-	return c
+	heldNext = now + 30
+	return heldChar
 }
 
 // doKeyboardInput reads a key and returns its input code (with KEY_SHIFT, KEY_ALT and
@@ -311,8 +325,8 @@ var (
 func doKeyboardInput(array bool) int {
 	// UltimaHacks binds the left Shift alone. It has no character, so KEY never gives it; its
 	// release is seen in keyOn (0x2A, its scan code) and given with the modifiers held, unless
-	// another key went down meanwhile (Shift+/ is ? and no jump). A release, not a press, so
-	// the key timer does not hold back the keys pressed with it.
+	// another key went down meanwhile (Shift+/ is ? and no jump). It goes on the release, not
+	// the press.
 	now := keyOn[0x2A] != 0
 	if now && !lshiftWas {
 		lshiftAlone = true
@@ -322,7 +336,6 @@ func doKeyboardInput(array bool) int {
 	released := !now && lshiftWas && lshiftAlone
 	lshiftWas = now
 	if released {
-		keyTime = GameTime()
 		c := keyLShift | KEY_SHIFT
 		if altDown() {
 			c |= KEY_ALT
@@ -334,13 +347,12 @@ func doKeyboardInput(array bool) int {
 	}
 	c := KEY()
 	if array {
-		c = doKeyarrayInput()
+		c = keyArrayInput(c)
 	}
 	c &= 0xFF
 	if c == 0 {
 		return -1
 	}
-	keyTime = GameTime()
 	if c&0x80 != 0 {
 		if shiftDown() {
 			c |= KEY_SHIFT
