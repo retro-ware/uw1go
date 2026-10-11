@@ -188,8 +188,8 @@ func useKey(obj *Object, how int) {
 }
 
 // useThing starts a two-object use: obj goes on the cursor and fn waits for the target.
-// An inventory object is not put on the cursor: it is carried (left click) and used on
-// the target with a right click (useCarriedOn).
+// An inventory object is instead picked up as a left click would (mousInInv sees
+// takeAfterUse) and used on the target with a right click (useCarriedOn).
 func useThing(obj *Object, fn ActorFn) {
 	n, ok := getName(obj, false, false)
 	if !ok {
@@ -200,7 +200,8 @@ func useThing(obj *Object, fn ActorFn) {
 			UsingPole = false
 			FixPlayerEquips()
 		}
-		scrollPrint("Pick up the " + n + " and right-click what to use it on.\n")
+		scrollPrint("Right-click what to use the " + n + " on.\n")
+		takeAfterUse = true
 		return
 	}
 	scrollPrint("Use " + n + " on what?\n")
@@ -1038,6 +1039,9 @@ func useNSpellCharges(obj *Object) {
 		}
 	}
 }
+
+// takeAfterUse: the inventory object just used needs a target, so it is picked up.
+var takeAfterUse bool
 
 // carriedUse is the carried object while useCarriedOn uses it; nil once used up.
 var carriedUse *Object

@@ -606,6 +606,10 @@ func mousInInv() {
 			case 2:
 				if inplist.mode != MODE_CONV {
 					DoInventoryMouse(0)
+					if takeAfterUse {
+						takeAfterUse = false
+						DoInventoryMouse(invTake)
+					}
 				} else {
 					DoInventoryMouse(-2)
 				}
