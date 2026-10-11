@@ -537,7 +537,11 @@ func mousIn3d(int) {
 		mouseRelease(true) // a click: a take puts the thing on the pointer, not dragged
 		actOn(how)
 	case GIM_CARRY:
-		DoSpecialActions(0x17)
+		if left {
+			DoSpecialActions(0x17)
+		} else if newPlObj = pick3d(2); newPlObj != nil {
+			useCarriedOn(newPlObj, 0)
+		}
 		mouseRelease(true)
 	case GIM_TARGET:
 		if newPlObj = pick3d(2); newPlObj != nil {
@@ -608,6 +612,13 @@ func mousInInv() {
 			}
 		}
 	case GIM_CARRY:
+		if inplist.cmd == 2 {
+			if newPlObj = pickInv(2); newPlObj != nil && newPlObj != CursorObjPtr {
+				useCarriedOn(newPlObj, 1)
+			}
+			mouseRelease(true)
+			break
+		}
 		DoInventoryMouse(4)
 	case GIM_TARGET:
 		hit := FindInventoryHit(inplist.x+0xF0, inplist.y+0x52)

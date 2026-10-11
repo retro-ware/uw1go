@@ -328,7 +328,8 @@ func scrollPrint3(text []byte, flag int) {
 		scroll.morePending = false
 	}
 	width := scroll.curX + cwidth(si)
-	if scroll.bottom <= width {
+	// A bare "\n" (or "") past the edge has nothing to wrap: wrapping it recursed forever.
+	if n := cstrlen(si); scroll.bottom <= width && !(n == 0 || n == 1 && si[0] == '\n') {
 		scrollWrap(si, flag)
 		return
 	}

@@ -97,6 +97,15 @@ func UseObj(who, obj *Object, how int) *Object {
 // usingPunt uses up obj, from the inventory (inv) or from its tile (MapObjX, MapObjY).
 // True when the object is gone.
 func usingPunt(obj *Object, inv, how bool) bool {
+	if inv && obj == carriedUse {
+		if obj.IsQuant() != 0 && obj.LinkF()&LINK_SPECIAL == 0 && obj.LinkF() > 1 {
+			obj.SetLinkF(obj.LinkF() - 1)
+			return false
+		}
+		carriedUse = nil
+		ObjPunt(nil, obj, true)
+		return true
+	}
 	if inv {
 		InvRemoveOneObject(obj)
 		obj = ObjPunt(nil, obj, how)
@@ -179,10 +188,20 @@ func useKey(obj *Object, how int) {
 }
 
 // useThing starts a two-object use: obj goes on the cursor and fn waits for the target.
+// An inventory object is not put on the cursor: it is carried (left click) and used on
+// the target with a right click (useCarriedOn).
 func useThing(obj *Object, fn ActorFn) {
 	n, ok := getName(obj, false, false)
 	if !ok {
 		n = "UNNAMED"
+	}
+	if inInventory(obj) {
+		if obj.Item() == ITEM_POLE {
+			UsingPole = false
+			FixPlayerEquips()
+		}
+		scrollPrint("Pick up the " + n + " and right-click what to use it on.\n")
+		return
 	}
 	scrollPrint("Use " + n + " on what?\n")
 	forceMouseCursor(obj.Item())
@@ -1018,4 +1037,75 @@ func useNSpellCharges(obj *Object) {
 			ObjFree(spell)
 		}
 	}
+}
+
+// carriedUse is the carried object while useCarriedOn uses it; nil once used up.
+var carriedUse *Object
+
+// inInventory reports whether obj sits in an inventory slot or the player's object list.
+func inInventory(obj *Object) bool {
+	index := ObjMemTPtr(obj)
+	for i := 0; i < NUM_INV_SLOTS; i++ {
+		if Inventory[i].Index() == index {
+			return true
+		}
+	}
+	return ObjFind(&ThePlayer.OL, true, index) != nil
+}
+
+// carriedActor is the second half of obj's two-object use, or nil when obj has none.
+func carriedActor(obj *Object) ActorFn {
+	switch item := obj.Item(); {
+	case item == ITEM_KEY_OF_INFINITY:
+		return useKeyOfInfinityOn
+	case item == ITEM_LOCKPICK:
+		return useLockpickOn
+	case obj.Major() == MAJOR_SPEC && obj.Minor() == 0 && item < ITEM_LOCK:
+		return useKeyOn
+	case item >= ITEM_SKULL_C2 && item <= ITEM_PILE_OF_BONES_C6:
+		return useBonesOn
+	case item == ITEM_ANVIL:
+		return useAnvilOn
+	case item == ITEM_POLE:
+		return usePoleOn
+	case item == ITEM_SPIKE:
+		return spikeDoorOn
+	case item == ITEM_ORB_ROCK:
+		return tybalsOrbOn
+	case item == ITEM_ROCK_HAMMER:
+		return useRockHammerOn
+	case item == ITEM_OIL_FLASK:
+		return useOilOn
+	}
+	return nil
+}
+
+// useCarriedOn uses the carried object on target (a right click while carrying; other: 1
+// for an inventory target). The object stays carried unless the use took it up.
+func useCarriedOn(target *Object, other int) {
+	obj := CursorObjPtr
+	fn := carriedActor(obj)
+	if fn == nil {
+		scrollPrint("You cannot use that on anything.\n")
+		return
+	}
+	if obj.Item() == ITEM_POLE {
+		UsingPole = true
+	}
+	if other == 0 && (!InPickRange(PickDist, target, PickMap) || BlockingTerrain(PickDist, target)) {
+		gameSprint(0x5E)
+	} else {
+		carriedUse, ObjectActing, ObjectActor = obj, obj, fn
+		fn(target, 1, other)
+	}
+	UsingPole = false
+	FixPlayerEquips()
+	obj, carriedUse = carriedUse, nil
+	if obj == nil {
+		releaseCursor()
+		return
+	}
+	CursorObjPtr = obj
+	GameInputMode = GIM_CARRY
+	forceMouseCursor(obj.Item())
 }

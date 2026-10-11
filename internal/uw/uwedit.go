@@ -173,13 +173,11 @@ func newscr(mode int) {
 }
 
 func strtDemscr() {
-	var pal [0x300]byte
 	mouseHide()
 	demousPlayer()
 	wideOn()
 	place3dView(leftX(0), 0xC7, gr.W, viewH) // the whole width, down to the message scroll
-	copy(pal[:], gr.Palette[:])
-	fadeout(pal[:], 2)
+	grfxQuikpal(PAL_GAME)                    // no fades: switching screens is instant
 	if !loadBitMap(-1, "DATA\\main.byt") {
 		pfatalCode(ERR_READ | 0xB)
 	}
@@ -190,8 +188,6 @@ func strtDemscr() {
 	renderFB()
 	sendFB()
 	mouseShow()
-	readQuikpal(PAL_GAME, pal[:])
-	fadein(pal[:], 2)
 }
 
 func freeDemscr() {
