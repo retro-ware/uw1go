@@ -163,7 +163,7 @@ func tryClear(int) {
 
 // tryCast casts the spell on the shelf.
 func tryCast(how int) {
-	if GameInputMode != 0 {
+	if GameInputMode != 0 || panelShown {
 		return
 	}
 	if inplist.cmd&2 != 0 && how == 0 {

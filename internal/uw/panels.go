@@ -181,6 +181,7 @@ var updOldTime byte
 // updateScreen steps the display elements whose redraw bits are set.
 func updateScreen() {
 	hideEnemyHealth()
+	updateMinimap()
 	now := byte(GameTime())
 	did := false
 	if nowAdjust != 0 {
@@ -446,11 +447,12 @@ func loadWeapcm() bool {
 	return true
 }
 
-// setRunes shows the three runes on the shelf (0x18 and up leaves a place empty).
+// setRunes shows the three runes on the shelf (0x18 and up leaves a place empty), none
+// while the panel, which reaches over the shelf, is shown.
 func setRunes(runes []byte) {
 	for i := 0; i < 3; i++ {
 		icon := -1
-		if runes[i] < 0x18 {
+		if runes[i] < 0x18 && !panelShown {
 			icon = int(runes[i]) + 0xE8
 		}
 		drawSmallIcon(icon, runeX[i], runeY, 0x10)

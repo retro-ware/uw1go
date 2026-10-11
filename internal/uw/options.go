@@ -64,6 +64,7 @@ func runOptionsPanel(show int) {
 	LeftPanel = 1
 	if show != 0 {
 		mouseHide()
+		hideMinimap()
 		gr.SetLayer(optX(), 0xBD, 0x23, 0x6C, gr.LayerPage) // over the view
 		gr.GrSoftPageFlip()
 		setOptionsPage(6)
@@ -126,6 +127,7 @@ func closeOptionPanel() {
 	optionsPage = 7
 	gr.SetLayer(optX(), 0xBD, 0x23, 0x6C, gr.LayerFrame) // the view again
 	gr.RefreshRect(optX(), 0xBD, 0x23, 0x6C)
+	miniOn = false // the minimap, hidden under it, comes back
 	editchng(2)
 	gameoptsDone = true
 	mouseShow()

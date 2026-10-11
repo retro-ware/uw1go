@@ -51,20 +51,20 @@ var (
 	compassX   int // the plate's left (layoutHUD)
 	runeX      [3]int
 	spellX     [3]int
-	runeY      = 0x31
+	runeY      = flaskY + 0x10 // the stones' 14 rows end 2 above the flasks
 	spellY     = 0x33
 )
 
 // layoutHUD places the furniture whose place depends on the screen's width: the compass
 // in the bottom left corner (its star 4 from the edge) with the active spells beside it,
-// the rune shelf in the bottom middle. The flasks stay at the right with the panel.
+// the rune shelf centred over the flasks, which stay at the right with the panel.
 func layoutHUD() {
 	compassX = leftX(3)
 	for i := range spellX {
 		spellX[i] = compassX + 0x38 + (2-i)*0x11
 	}
 	for i := range runeX {
-		runeX[i] = midX(0x8A + i*0x0F)
+		runeX[i] = 0x108 + i*0x0F
 	}
 }
 
@@ -155,6 +155,7 @@ func hudStart() {
 	eyeState = -1
 	healthOn = false
 	drawGargoyle()
+	miniOn = false
 	panelShown = lookOn // so that showPanel draws it or hides it
 	showPanel(!lookOn)
 }
@@ -428,6 +429,7 @@ func showPanel(on bool) {
 	if on {
 		RightPanel = int(setting[SCR_PANEL])
 		panelShown = true
+		setRunes(player.Shelf[:]) // the shelf goes under the panel
 		gr.SetLayer(panelX, panelY, panelW, panelH, gr.LayerPage)
 		if pic, ok := readGrFar("panels", RightPanel); ok {
 			gr.Show(panelX, panelY, pic, panelH, panelW, 0, 0)
@@ -440,6 +442,7 @@ func showPanel(on bool) {
 		RightPanel = PANEL_HIDDEN
 		gr.SetLayer(panelX, panelY, panelW, panelH, gr.LayerFrame)
 		gr.RefreshRect(panelX, panelY, panelW, panelH)
+		setRunes(player.Shelf[:])
 		editchng(2)
 	}
 	inputEnable(panelInput, on)
