@@ -357,7 +357,12 @@ func grdbElem(automap *byte) {
 			grWcall(&pts, sqmod, 0x10-ht, byte(t.Wall()))
 		}
 	}
-	if drawingBehind { // no objects behind the player, and the automap left alone
+	if drawingBehind { // the eye's row's objects come with the forward pass; no automap
+		if pGloc >= glocAt(1, 0) {
+			doObjsort(&t.Objects)
+		} else {
+			clearObjsort()
+		}
 		return
 	}
 	doObjsort(&t.Objects)

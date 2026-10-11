@@ -19,6 +19,7 @@ var (
 	NewPlayerLevel int
 	NewPlyFade     = 3
 	inGame         bool
+	nextScrMode    int // the screen newscr goes to, for the one it leaves
 	nppFunc        func()
 )
 
@@ -150,6 +151,10 @@ func changeScreen(mode int) {
 
 // newscr switches screens; a negative mode returns to the one before.
 func newscr(mode int) {
+	nextScrMode = mode
+	if mode < 0 {
+		nextScrMode = lastscrmode
+	}
 	if scrnum != -1 && editorDispatch[scrnum][15] != nil {
 		editorDispatch[scrnum][15]()
 	}
@@ -171,12 +176,14 @@ func strtDemscr() {
 	var pal [0x300]byte
 	mouseHide()
 	demousPlayer()
-	place3dView(0, 0xC7, 0x140, viewH) // the whole width, down to the message scroll
+	wideOn()
+	place3dView(leftX(0), 0xC7, gr.W, viewH) // the whole width, down to the message scroll
 	copy(pal[:], gr.Palette[:])
 	fadeout(pal[:], 2)
 	if !loadBitMap(-1, "DATA\\main.byt") {
 		pfatalCode(ERR_READ | 0xB)
 	}
+	widenScroll()
 	initGamedisp()
 	editchng(0x7DFE)
 	FixPlayerEquips()
@@ -189,6 +196,9 @@ func strtDemscr() {
 
 func freeDemscr() {
 	hudStop()
+	if nextScrMode != MODE_CONV { // the conversation draws over the game screen
+		wideOff()
+	}
 	demousPlayer()
 	clearGamedisp()
 	holdScrgr()

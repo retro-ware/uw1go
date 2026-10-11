@@ -650,7 +650,9 @@ restart:
 func runcutscene(n int) {
 	x, y, w, h := 0, 0xC7, 0x140, 0xC8
 	if n >= 0x100 { // the original's window, in the middle of the view
-		x, y, w, h = (0x140-0xAC)/2, 0xC7-(viewH-0x70)/2, 0xAC, 0x70
+		x, y, w, h = midX((0x140-0xAC)/2), 0xC7-(viewH-0x70)/2, 0xAC, 0x70
+	} else {
+		wideOff()
 	}
 	if n == 1 || n == 2 || n == 3 {
 		loadNewMusic(4, true)

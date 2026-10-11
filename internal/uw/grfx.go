@@ -13,7 +13,7 @@ var fadeBuffer [0x300]byte
 
 func grfxInit() bool {
 	gr.InitGraphics()
-	gr.SetTheWindow(0, 0xC7, 0x13F, 0)
+	gr.FullWindow()
 	gr.GrSoftPageFlip()
 	return grfxLoadFont("font5x6p.sys")
 }
@@ -35,7 +35,7 @@ func grfxClose() {
 // grfxClear clears the whole screen to colour 0.
 func grfxClear() {
 	mouseHide()
-	gr.SetTheWindow(0, 0xC7, 0x13F, 0)
+	gr.FullWindow()
 	gr.SetTheColor(0)
 	gr.ClearWindow()
 	mouseShow()
@@ -171,7 +171,7 @@ func loadBitMap(pal int, name string) bool {
 			grfxClear()
 			gr.GrSoftPageFlip()
 		}
-		gr.SetTheWindow(0, 0xC7, 0x13F, 0)
+		gr.FullWindow()
 		t := gr.Transparency
 		gr.Transparency = false
 		gr.Show(0, 0xC7, buf, 0xC8, 0x140, 0, 0)

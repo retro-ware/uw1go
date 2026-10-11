@@ -1,6 +1,9 @@
 package uw
 
-import "github.com/memmaker/uw1go/internal/gr"
+import (
+	"github.com/memmaker/uw1go/internal/gr"
+	"github.com/memmaker/uw1go/internal/host"
+)
 
 // The game screen without its frame: the 3D view fills the screen down to the message
 // scroll, and what is left of the furniture lies over it on gr's HUD layer, cut out of its
@@ -23,8 +26,8 @@ const (
 	eyesX = 0x80
 	eyesY = 4
 
-	compassX, compassY = 0x70 + hudShift, 0x39 // the plate's top left (y up)
-	flaskY             = 0x41
+	compassY = 0x39 // the plate's top (y up)
+	flaskY   = 0x41
 
 	// viewH is the view's height: the screen down to the message scroll.
 	viewH = 0xA8
@@ -45,11 +48,55 @@ var (
 	eyeGlow    bool
 	flaskKeep  []bool
 	flX        = [2]int{0x106, 0x122}
-	runeX      = [3]int{0xC6, 0xD5, 0xE4}
-	spellX     = [3]int{0x69, 0x58, 0x47}
+	compassX   int // the plate's left (layoutHUD)
+	runeX      [3]int
+	spellX     [3]int
 	runeY      = 0x31
 	spellY     = 0x33
 )
+
+// layoutHUD places the furniture whose place depends on the screen's width: the compass
+// in the bottom left corner (its star 4 from the edge) with the active spells beside it,
+// the rune shelf in the bottom middle. The flasks stay at the right with the panel.
+func layoutHUD() {
+	compassX = leftX(3)
+	for i := range spellX {
+		spellX[i] = compassX + 0x38 + (2-i)*0x11
+	}
+	for i := range runeX {
+		runeX[i] = midX(0x8A + i*0x0F)
+	}
+}
+
+// widenScroll draws the message scroll's art across a wide screen: MAIN.BYT's left end at
+// the left edge, its paper (columns scrollA to scrollB-1) repeated up to where the 320 wide
+// screen's, drawn already, goes on.
+func widenScroll() {
+	const scrollA, scrollB, rows = 0x18, 0x118, 0x20
+	if gr.OX == 0 {
+		return
+	}
+	buf := make([]byte, 0xFA00)
+	if !bltfromdrive("DATA\\main.byt", buf) {
+		return
+	}
+	w := gr.OX + scrollA
+	strip := make([]byte, w*rows)
+	for r := 0; r < rows; r++ {
+		src := buf[(0xC8-rows+r)*0x140:]
+		for p := 0; p < w; p++ {
+			c := p
+			if p >= scrollA {
+				c = scrollA + (p-scrollA)%(scrollB-scrollA)
+			}
+			strip[r*w+p] = src[c]
+		}
+	}
+	t := gr.Transparency
+	gr.Transparency = false
+	gr.Show(leftX(0), rows-1, strip, rows, w, 0, 0)
+	gr.Transparency = t
+}
 
 // iconPix is an icon's picture: its pixels, rows top first, and its size.
 func iconPix(icon int) ([]byte, int, int) {
@@ -241,7 +288,7 @@ func drawGargoyle() {
 	eyeState = st
 	pix := append([]byte(nil), gargPix...)
 	blit(pix, gargW, eyePics[st], 20, 3, eyesX-gargX0, eyesY, false)
-	hudPut(gargX0+hudShift, 0xC7, gargW, gargH, pix, gargKeep)
+	hudPut(midX(gargX0+hudShift), 0xC7, gargW, gargH, pix, gargKeep)
 }
 
 // drawCompass draws the compass turned to dir: the star and the needle on it, without the
@@ -519,7 +566,7 @@ func showEnemyHealth(hp, most int) {
 			pix[r*bw+c], keep[r*bw+c] = p, true
 		}
 	}
-	hudPut(healthX, healthY, bw, bh, pix, keep)
+	hudPut(midX(healthX), healthY, bw, bh, pix, keep)
 	healthUntil, healthOn = GameTime()+healthShow, true
 }
 
@@ -527,11 +574,58 @@ func showEnemyHealth(hp, most int) {
 func hideEnemyHealth() {
 	if healthOn && int32(GameTime()-healthUntil) >= 0 {
 		healthOn = false
-		hudClear(healthX, healthY, healthW+2, healthH+2)
+		hudClear(midX(healthX), healthY, healthW+2, healthH+2)
 	}
 }
 
 // onPanel is whether screen point x, y (y up) is on the right-hand panel while it shows.
 func onPanel(x, y int) bool {
 	return panelShown && x >= panelX && x < panelX+panelW && y <= panelY && y > panelY-panelH
+}
+
+// The game screen goes as wide as the window wants (host.WantW): the 320 wide screen's
+// coordinates, which the game draws in, stay, with its right edge on the wide screen's; the
+// view, the message scroll and the gargoyle span or centre on the whole width, and the
+// furniture on the left (the compass, the options panel) has negative x. The other screens
+// (the map, the help, the menus, the cutscenes) are 320 wide, which the host shows 4:3.
+
+// leftX is x from the screen's left edge, midX x of the 320 wide screen moved with its
+// middle.
+func leftX(x int) int { return x - gr.OX }
+func midX(x int) int  { return x - gr.OX/2 }
+
+// wideOn makes the screen as wide as the window wants, for the game screen.
+func wideOn() {
+	gr.SetWidth(host.WantW, host.WantW-0x140)
+	mouseFreereign()
+	layoutScroll()
+	layoutHUD()
+}
+
+// wideOff makes it 320 wide again.
+func wideOff() {
+	gr.SetWidth(0x140, 0)
+	mouseFreereign()
+	layoutScroll()
+	layoutHUD()
+}
+
+// The game screen is laid out again for a new width once the window's has kept still a
+// quarter of a second, while nothing is going on (not carrying, aiming or talking).
+var (
+	wantW     int
+	wantSince uint32
+)
+
+func checkWidth() {
+	if !inGame || scrnum != 0 || !hudActive || inplist.mode != MODE_GAME || GameInputMode != GIM_NONE {
+		return
+	}
+	if host.WantW != wantW {
+		wantW, wantSince = host.WantW, GameTime()
+		return
+	}
+	if wantW != gr.W && GameTime()-wantSince >= 0x40 {
+		newscr(MODE_GAME)
+	}
 }

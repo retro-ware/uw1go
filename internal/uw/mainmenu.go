@@ -72,6 +72,7 @@ func drawStartButtons(b []Button, text []string, sel int) {
 
 // realStart runs the main menu until a game is started or restored.
 func realStart(intro bool) {
+	wideOff()
 	var pal [0x300]byte
 	buttons = []Button{
 		{x: 0x62, y: 0x76, w: 1, h: 1},

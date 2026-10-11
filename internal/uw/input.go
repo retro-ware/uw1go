@@ -78,6 +78,15 @@ func inputEnable(hndl int, on bool) {
 	}
 }
 
+// inputSetRect moves a mouse entry.
+func inputSetRect(hndl, ulx, uly, lrx, lry int) {
+	for i := range mousDisp {
+		if m := &mousDisp[i]; m.hndl == hndl && hndl != 0 {
+			m.ulx, m.uly, m.lrx, m.lry = ulx, uly, lrx, lry
+		}
+	}
+}
+
 // inputDel removes an entry; the last entry moves into its place.
 func inputDel(hndl int) {
 	if hndl == 0 {

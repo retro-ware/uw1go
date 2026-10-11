@@ -484,7 +484,7 @@ func ShowAutoMapLevel(lev int) {
 	mouseHide()
 	if bltfromdrive("DATA\\blnkmap.byt", buf) {
 		gr.GrSoftPageFlip()
-		gr.SetTheWindow(0, 0xC7, 0x13F, 0)
+		gr.FullWindow()
 		gr.Show(0, 0xC7, buf, 0xC8, 0x140, 0, 0)
 		ShowDungeonMap()
 		if lev == PlayerLevel && lev != 9 {

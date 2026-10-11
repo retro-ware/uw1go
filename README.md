@@ -24,7 +24,8 @@ UW.EXE, as underworld-exhumed has it.
 - The game starts at the main menu, without the title sequence or the introduction (the menu still offers it), and the menu's cursor wraps around.
 - Textures are mapped perspective-correct (the idea from SiENcE's uwpatch), so walls no longer bend and floors no longer swim.
 - You can look three times as far up and down, and the squares beside and behind you are drawn too. Creatures and objects keep their size when the view pitches.
-- The 3D view fills the screen down to the message scroll, with no frame. The gargoyle sits in a small bar at the top centre and his eyes show the weapon's charge (dark grey, slight yellow, bright yellow, orange, glowing red); under him, for a few seconds after each blow you land, a bar shows the creature's health, narrowing as it falls and green, then orange, then red; the compass is at the bottom centre and the flasks at the bottom right. The icons, the power gem, the dragons and the frame are gone.
+- The 3D view fills the screen down to the message scroll, with no frame. The gargoyle sits in a small bar at the top centre and his eyes show the weapon's charge (dark grey, slight yellow, bright yellow, orange, glowing red); under him, for a few seconds after each blow you land, a bar shows the creature's health, narrowing as it falls and green, then orange, then red; the compass is at the bottom left with the active spells beside it, the rune shelf at the bottom centre and the flasks at the bottom right. The icons, the power gem, the dragons and the frame are gone.
+- Fullscreen is widescreen: the game takes the screen's shape (up to 32:9) and the view widens to fill it, with the panels and the flasks at the right edge, the compass at the left and the gargoyle in the middle; the message scroll stretches across. There are no black bars: the window keeps the original 4:3 shape (it springs back to it after a resize), and the screens that stay 320 wide (the map, the help, the menus, the cutscenes) are stretched to fill a wide screen. `Alt+Enter` or `F11` toggles fullscreen on the desktop; in a browser the page's own fullscreen does.
 - Mouse look is on from the start; `V` turns it off and on. Leaving it shows the inventory panel over the view; turning it back on hides it. While it is on, the mouse turns the view and the cursor stays in the middle as a crosshair. A take goes straight into the pack (onto a matching stack first), as the crosshair cannot drag; with the pack full it stays carried. `Alt+V` cycles through the axis inversions. `UW1GO_LOOK_SPEED` sets its speed in percent (10 to 400, default 100).
 - Movement is Quake-like: the keys held add up, so `W` with `A` or `D` goes diagonally (no faster than straight), sliding and backing up go most of running speed instead of a quarter, and speeding up and stopping take a tenth of a second at any frame rate. In a browser, a click takes the pointer back after `Esc` lets it go.
 - Sliding along a wall no longer turns the view, and the right-hand panel slides twice as fast.
@@ -48,6 +49,7 @@ UW.EXE, as underworld-exhumed has it.
 | `G` / `H` | game info / both flasks |
 | `M` | the map; there `S` `W` go a level up, down and `C` back to the player's |
 | `F5` / `F7` | quick save / quick load |
+| `Alt+Enter`, `F11` | fullscreen, widescreen (desktop) |
 | `Ctrl+Alt+letter` | put that rune on the shelf; `Ctrl+Alt+Backspace` clears the shelf, `Ctrl+Alt+Space` casts |
 
 ## Running
@@ -95,4 +97,5 @@ compiled to WebAssembly, offered by the page as `goplayMT32`).
 presses and clicks (and ignores the real keyboard and mouse);
 `UW1GO_SHOT=DIR` is where its screenshots go. `UW1GO_WARP=x,y`,
 `UW1GO_LIGHT` and `UW1GO_TALK=1` help get to a place or a conversation
-quickly.
+quickly. `UW1GO_WIDTH=N` fixes the game screen's width (320 to 864) as a
+wide window would ask for it.

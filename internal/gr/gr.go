@@ -2,7 +2,7 @@
 // VIDMODE.ASM, GRLIBF.ASM, GRLIBI.ASM and the rest), the routines the game's C draws the
 // screen with. The semantics are the original's:
 //
-//   - The screen is 320 by 200 with two pages; drawing goes to the drawing page, and in the
+//   - The screen is 320 by 200 with two pages (the game screen wider: see SetWidth); drawing goes to the drawing page, and in the
 //     normal state the drawing page is the one shown. grSoftPageFlip switches the drawing page
 //     only, grPageFlip shows the drawing page and switches to the other.
 //   - y counts up from the bottom of the screen (row 0 is the bottom line), and the clip
@@ -15,21 +15,48 @@
 // Pages are kept top row first; RowOf turns a library y into a row index.
 package gr
 
+// H is the screen's height; MaxW is the widest the screen gets.
 const (
-	W = 320
-	H = 200
+	H    = 200
+	MaxW = 864
 )
+
+var (
+	// W is the screen's width: 320, or wider for a wide window (the game screen).
+	W = 320
+	// OX is where the library's x 0 is on the screen: the callers draw in the 320 wide
+	// screen's coordinates, which a wide game screen puts at its right edge, and what lies
+	// left of it has negative x.
+	OX = 0
+)
+
+// SetWidth makes the screen w wide with the library's x 0 at ox; the pages are cleared when
+// the width changes, and the window is the whole screen.
+func SetWidth(w, ox int) {
+	if w != W {
+		W = w
+		for i := range Pages {
+			clear(Pages[i][:])
+		}
+		ClearHUD()
+	}
+	OX = ox
+	FullWindow()
+}
+
+// FullWindow makes the clip window the whole screen.
+func FullWindow() { SetTheWindow(-OX, H-1, W-1-OX, 0) }
 
 // RowOf returns the storage row of library y (which counts up from the bottom).
 func RowOf(y int) int { return H - 1 - y }
 
 var (
-	Pages     [2][W * H]byte
+	Pages     [2][MaxW * H]byte
 	DrawPage  int // the page drawing goes to
 	ShownPage int // the page on the screen
 
 	// The clip window (y counts up, so WinBottom <= WinTop).
-	WinLeft, WinTop, WinRight, WinBottom = 0, H - 1, W - 1, 0
+	WinLeft, WinTop, WinRight, WinBottom = 0, H - 1, 319, 0
 
 	// ShowClip clips bitmaps to the window; Transparency skips colour 0 in them.
 	ShowClip     bool
@@ -50,14 +77,14 @@ var (
 	DAC     [768]byte
 )
 
-// Draw returns the drawing page.
-func Draw() []byte { return Pages[DrawPage][:] }
+// Draw returns the drawing page (W by H).
+func Draw() []byte { return Pages[DrawPage][:W*H] }
 
 // Other returns the page that is not the drawing page.
-func Other() []byte { return Pages[DrawPage^1][:] }
+func Other() []byte { return Pages[DrawPage^1][:W*H] }
 
 // Shown returns the page on the screen.
-func Shown() []byte { return Pages[ShownPage][:] }
+func Shown() []byte { return Pages[ShownPage][:W*H] }
 
 // InitGraphics resets the screen: both pages cleared, the window the whole screen.
 func InitGraphics() {
@@ -65,7 +92,7 @@ func InitGraphics() {
 		clear(Pages[i][:])
 	}
 	DrawPage, ShownPage = 0, 0
-	SetTheWindow(0, H-1, W-1, 0)
+	FullWindow()
 }
 
 // GrPageFlip shows the drawing page and makes the other one the drawing page.
@@ -125,6 +152,7 @@ func span(y, x0, x1 int, st *spanState) {
 	if y < 0 || y >= H {
 		return
 	}
+	x0, x1 = x0+OX, x1+OX
 	if x0 < 0 {
 		x0 = 0
 	}
@@ -303,6 +331,7 @@ func PlotPixel(x, y int) {
 
 // ReadPixel returns the pixel at (x, y) of the drawing page.
 func ReadPixel(x, y int) byte {
+	x += OX
 	if x < 0 || x >= W || y < 0 || y >= H {
 		return 0
 	}
@@ -315,7 +344,8 @@ func Show(x, y int, bm []byte, h, w, sx, sy int) {
 	showInto(Pages[DrawPage][:], W, H, x, y, bm, w, h, sx, sy, Transparency)
 }
 
-// showInto is show's common path for a target of tw by th (y up from its bottom).
+// showInto is show's common path for a target of tw by th (y up from its bottom), the
+// clip window in the library's x and the target's x OX on.
 func showInto(dst []byte, tw, th int, x, y int, bm []byte, w, h, sx, sy int, trans bool) {
 	cw := w - sx
 	ch := h - sy
@@ -357,7 +387,7 @@ func showInto(dst []byte, tw, th int, x, y int, bm []byte, w, h, sx, sy int, tra
 		}
 		drow := (th - 1 - ly) * tw
 		for c := 0; c < cw; c++ {
-			lx := x + c
+			lx := x + c + OX
 			if lx < 0 || lx >= tw {
 				continue
 			}
@@ -379,7 +409,7 @@ func Grab(dst []byte, x, y, w, h int) {
 	for r := 0; r < h; r++ {
 		ly := y - r
 		for c := 0; c < w; c++ {
-			lx := x + c
+			lx := x + c + OX
 			var v byte
 			if lx >= 0 && lx < W && ly >= 0 && ly < H {
 				v = p[RowOf(ly)*W+lx]

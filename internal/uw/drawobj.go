@@ -55,7 +55,19 @@ var dirtab = [32]byte{
 var rect_flagcol = [2]int{0xE4, 0x66}
 
 // objPoint is where the object stands.
-func objPoint() render.Vertex { return rend.Point(objxloc, objyloc, objzloc) }
+func objPoint() render.Vertex {
+	x, z := objLoc()
+	return rend.Point(x, objyloc, z)
+}
+
+// objLoc is the object's place across and ahead in the forward frame: the back pass's grid
+// is turned half round about the eye's square, as gridPoint turns its corners.
+func objLoc() (int, int) {
+	if drawingBehind {
+		return 0x100 - objxloc, 0x100 - objzloc
+	}
+	return objxloc, objzloc
+}
 
 // doObj draws one object.
 func doObj(o *Object) {
@@ -243,7 +255,11 @@ func doRect(model int, o *Object, heading int, tex int) {
 	if hilite != -1 {
 		rend.SetVar(8, hilite)
 	}
-	rend.Model(model, objxloc, objyloc, objzloc, int16(head))
+	x, z := objLoc()
+	if drawingBehind {
+		head += 0x8000
+	}
+	rend.Model(model, x, objyloc, z, int16(head))
 	if hilite != -1 {
 		rend.SetVar(8, (hilite+1)&1)
 	}

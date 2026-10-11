@@ -53,7 +53,7 @@ func FBToScreen() {
 		}
 		for c := 0; c < cursW; c++ {
 			fx := cursX + c
-			lx := FBX + fx
+			lx := FBX + fx + OX
 			if fx < 0 || fx >= FBW || lx < 0 || lx >= W {
 				continue
 			}
@@ -115,7 +115,10 @@ func (b *Block) CopyFB(x, y, w, h int) {
 			}
 			v := FB[(FBH-1-ly)*FBW+lx]
 			if HUDOn {
-				i := RowOf(FBY-(FBH-1-ly))*W + FBX + lx
+				i := RowOf(FBY-(FBH-1-ly))*W + FBX + lx + OX
+				if FBX+lx+OX < 0 || FBX+lx+OX >= W {
+					continue
+				}
 				switch Layer[i] {
 				case LayerHUD:
 					v = HUDPix[i]
@@ -164,8 +167,8 @@ const (
 var (
 	// HUDOn: the copy honours Layer (the game screen); off, it copies the whole frame.
 	HUDOn  bool
-	Layer  [W * H]byte
-	HUDPix [W * H]byte
+	Layer  [MaxW * H]byte
+	HUDPix [MaxW * H]byte
 
 	// The pointer as drawn into the frame (top left in frame coordinates, y up), so that
 	// it shows over the HUD as well.
@@ -186,7 +189,7 @@ func SetLayer(x, y, w, h int, l byte) {
 			continue
 		}
 		for c := 0; c < w; c++ {
-			if lx := x + c; lx >= 0 && lx < W {
+			if lx := x + c + OX; lx >= 0 && lx < W {
 				Layer[row*W+lx] = l
 			}
 		}
@@ -202,7 +205,7 @@ func PutHUD(x, y, w, h int, pix []byte, keep []bool) {
 			continue
 		}
 		for c := 0; c < w; c++ {
-			lx := x + c
+			lx := x + c + OX
 			if lx < 0 || lx >= W {
 				continue
 			}
@@ -228,7 +231,7 @@ func RefreshRect(x, y, w, h int) {
 		row := RowOf(ly)
 		fy := FBY - ly // the frame's row
 		for c := 0; c < w; c++ {
-			lx := x + c
+			lx := x + c + OX
 			if lx < 0 || lx >= W {
 				continue
 			}
@@ -237,7 +240,7 @@ func RefreshRect(x, y, w, h int) {
 			case LayerHUD:
 				p[i] = HUDPix[i]
 			case LayerFrame:
-				if fx := lx - FBX; fx >= 0 && fx < FBW && fy >= 0 && fy < FBH && FB != nil {
+				if fx := lx - OX - FBX; fx >= 0 && fx < FBW && fy >= 0 && fy < FBH && FB != nil {
 					p[i] = FB[fy*FBW+fx]
 				}
 			}

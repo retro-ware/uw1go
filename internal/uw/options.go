@@ -36,9 +36,12 @@ func init() {
 		chooseQuit, chooseTop}
 }
 
+// optX is the options panel's left edge: 4 from the screen's.
+func optX() int { return leftX(4) }
+
 func optionsFrame() {
 	gr.SetTheColor(0x106)
-	gr.Rectangle(4, 0xBD, 0x26, 0x52)
+	gr.Rectangle(optX(), 0xBD, optX()+0x22, 0x52)
 }
 
 // runOptionsPanel runs the panel until a choice closes it, drawing the top page first if
@@ -46,7 +49,7 @@ func optionsFrame() {
 // buttons, and comes back as it was if the view is still there.
 func runOptionsPanel(show int) {
 	if was := lookOn; was {
-		lookX, lookY = 0x15, 0x88 // the panel's middle, where mouse look going off leaves it
+		lookX, lookY = optX()+0x11, 0x88 // the panel's middle, where mouse look going off leaves it
 		mouseLookSet(false)
 		renderFB() // the view without the crosshair, which no frame clears while the panel is up
 		sendFB()
@@ -61,7 +64,7 @@ func runOptionsPanel(show int) {
 	LeftPanel = 1
 	if show != 0 {
 		mouseHide()
-		gr.SetLayer(4, 0xBD, 0x23, 0x6C, gr.LayerPage) // over the view
+		gr.SetLayer(optX(), 0xBD, 0x23, 0x6C, gr.LayerPage) // over the view
 		gr.GrSoftPageFlip()
 		setOptionsPage(6)
 		gr.GrSoftPageFlip()
@@ -79,7 +82,7 @@ func runOptionsPanel(show int) {
 		switch input {
 		case 1, 2, 3:
 			x, y := mouseGetxy()
-			x -= 4
+			x -= optX()
 			y -= 0x52
 			if x >= 0 && x <= 0x23 && y >= 0 && y <= 0x6C {
 				optionsMouseClick(x, y)
@@ -98,12 +101,12 @@ func runOptionsPanel(show int) {
 
 func drawOptionsBack(pic int) {
 	reloadGrVpic(ICON_OPTB, "optbtns", pic)
-	picToScreen(ICON_OPTB, 4, 0xBD)
+	picToScreen(ICON_OPTB, optX(), 0xBD)
 }
 
 func drawOptionsBtn(row, pic int) {
 	reloadGrVpic(ICON_OPTB+1, "optbtns", pic)
-	picToScreen(ICON_OPTB+1, 5, 0xBD-(6-row)*15-2)
+	picToScreen(ICON_OPTB+1, optX()+1, 0xBD-(6-row)*15-2)
 }
 
 // hilite puts out the lit button and lights button pic at row.
@@ -121,8 +124,8 @@ func closeOptionPanel() {
 	mouseHide()
 	LeftPanel = 0
 	optionsPage = 7
-	gr.SetLayer(4, 0xBD, 0x23, 0x6C, gr.LayerFrame) // the view again
-	gr.RefreshRect(4, 0xBD, 0x23, 0x6C)
+	gr.SetLayer(optX(), 0xBD, 0x23, 0x6C, gr.LayerFrame) // the view again
+	gr.RefreshRect(optX(), 0xBD, 0x23, 0x6C)
 	editchng(2)
 	gameoptsDone = true
 	mouseShow()
@@ -133,7 +136,7 @@ func closeOptionPanel() {
 func drawTopPage() {
 	drawOptionsBack(1)
 	reloadGrVpic(ICON_OPTB, "optbtns", 3)
-	slotVram(grsWhich1(ICON_OPTB)).Show(4, 0xBD-92, 0x23, 0x6C, 0, 92)
+	slotVram(grsWhich1(ICON_OPTB)).Show(optX(), 0xBD-92, 0x23, 0x6C, 0, 92)
 	drawOptionsBtn(2, 0x10)
 	drawOptionsBtn(1, 0x12)
 	hilitePic = -1

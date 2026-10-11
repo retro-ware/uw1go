@@ -22,6 +22,7 @@ import (
 //	R:X:Y        the same with the right button (H lets it go)
 //	q            quit
 //	s:NAME       save the screen as NAME.png in UW1GO_SHOT
+//	w:N          the window asks for a frame N wide, as a resize does
 //
 // While a script is set, the real mouse and keyboard are ignored.
 
@@ -128,6 +129,10 @@ func runScript() bool {
 			}
 		case "H":
 			MouseButtons = 0
+		case "w":
+			if len(ev.args) > 0 {
+				WantW, fixedW = clampW(ev.args[0]), true
+			}
 		case "q":
 			scriptQuit = true
 		case "s":
@@ -148,8 +153,9 @@ func saveShot(name string) {
 	if f == nil {
 		return
 	}
-	img := image.NewRGBA(image.Rect(0, 0, ScreenW, ScreenH))
-	for i, c := range f.Pix[:ScreenW*ScreenH] {
+	fw := f.width()
+	img := image.NewRGBA(image.Rect(0, 0, fw, ScreenH))
+	for i, c := range f.Pix[:fw*ScreenH] {
 		r, g, b := f.Palette[int(c)*3]&63, f.Palette[int(c)*3+1]&63, f.Palette[int(c)*3+2]&63
 		img.Pix[i*4], img.Pix[i*4+1], img.Pix[i*4+2], img.Pix[i*4+3] = r<<2|r>>4, g<<2|g>>4, b<<2|b>>4, 255
 	}

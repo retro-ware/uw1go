@@ -70,7 +70,7 @@ func MOUSE() {
 	}
 	if host.MouseMoved {
 		host.MouseMoved = false
-		mouseDx = host.MouseX - mouseX
+		mouseDx = host.MouseX - gr.OX - mouseX
 		mouseDy = mouseY - (gr.H - 1 - host.MouseY)
 	}
 }
@@ -130,7 +130,7 @@ func mousIn3dP() bool { return mouseCheckReg(m3dx, m3dy-m3dh, m3dx+m3dw, m3dy) }
 
 func withFullWindow(f func()) {
 	wl, wt, wr, wb := gr.WinLeft, gr.WinTop, gr.WinRight, gr.WinBottom
-	gr.SetTheWindow(0, 0xC7, 0x13F, 0)
+	gr.FullWindow()
 	f()
 	gr.SetTheWindow(wl, wt, wr, wb)
 }
@@ -243,7 +243,7 @@ func mouseDragged(how bool) bool {
 
 func mouseConstrain(x0, y0, x1, y1 int) { conX0, conY0, maxX, maxY = x0, y0, x1, y1 }
 
-func mouseFreereign() { conX0, conY0, maxX, maxY = 0, 0, 0x13F, 0xC7 }
+func mouseFreereign() { conX0, conY0, maxX, maxY = leftX(0), 0, leftX(gr.W-1), 0xC7 }
 
 func doMouseInput() int {
 	moveMouse()
@@ -531,7 +531,7 @@ func moveMouse() {
 	}
 	wl, wt, wr, wb := gr.WinLeft, gr.WinTop, gr.WinRight, gr.WinBottom
 	if calledfrom3d {
-		gr.SetTheWindow(0, 0xC7, 0x13F, 0)
+		gr.FullWindow()
 	}
 	if actualMhide() {
 		mouseSaved = false

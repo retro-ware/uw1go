@@ -23,6 +23,7 @@ func Main() {
 	}()
 	host.ShowFrame = func() *host.Frame {
 		frame.Pix = gr.Shown()
+		frame.W = gr.W
 		frame.Palette = &gr.DAC
 		return &frame
 	}

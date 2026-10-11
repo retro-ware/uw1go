@@ -96,7 +96,7 @@ func strtConverse() {
 	changeMusicMaybe()
 	mouseHide()
 	gr.GrSoftPageFlip()
-	gr.SetTheWindow(0, 0xC7, 0x13F, 0)
+	gr.FullWindow()
 	gr.CopyVisibleToHidden()
 	if !gronkGr("converse", 0, -1, moveConvpic) {
 		freeConverse()

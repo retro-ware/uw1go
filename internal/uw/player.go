@@ -4,8 +4,9 @@ package uw
 // the mouse regions over the 3D view, the position and version reports, and the camera.
 
 var (
-	MoveCrits = true
-	PMsHndle  int
+	convMenuHndl int // the conversation's player menu, on the message scroll
+	MoveCrits    = true
+	PMsHndle     int
 
 	PHgt, PLeft, PBot, PWid int
 	curvrad                 int
@@ -105,7 +106,7 @@ func initPlayer() {
 	}
 	inputAddmouse(0x52, 0x98, 0x88, 0xBE, 4, 4, ih(npcBarter))
 	inputAddmouse(0x8B, 0x98, 0xC1, 0xBE, 4, 4, ih(playBarter))
-	inputAddmouse(0x0F, 1, 0x131, 0x1E, 0, 4, ih(convPlayMenu))
+	convMenuHndl = inputAddmouse(0x0F, 1, 0x131, 0x1E, 0, 4, ih(convPlayMenu))
 	inputAddkey(KEY_ALT|KEY_F7, 0, 0x1B, func(any) { showVersion() })
 	inputAddkey(KEY_ALT|KEY_F8, 0, 0x1B, func(any) { reportLoc() })
 }

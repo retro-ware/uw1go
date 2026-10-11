@@ -18,6 +18,7 @@ func mainloop() {
 		if changed != 0 {
 			doChanges()
 		}
+		checkWidth()
 		inputDispatch(inplist)
 	}
 }

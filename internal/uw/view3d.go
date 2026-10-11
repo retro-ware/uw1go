@@ -1,6 +1,7 @@
 package uw
 
 import (
+	"math"
 	"time"
 
 	"github.com/memmaker/uw1go/internal/gr"
@@ -593,21 +594,25 @@ var cPlayer camera
 // 45 degrees either side of the heading (and the squares beside the player) and no further
 // back than the eye's row. The frame is drawn in up to two passes (after UltimaHacks'
 // setupPerspectiveAndEnqueueDraw, as underworld-exhumed's VIEW3D.C has it), begun from
-// the camera looking ahead: at a pitch beyond the original's first the squares behind the
-// player, the grid built with the heading turned half round and cut to a small diamond,
-// without their objects, each point turned back into the forward frame (gridPoint); then the
+// the camera looking ahead: at a pitch beyond the original's, or with a view so wide that its
+// edge looks back past the grid's first row, first the squares behind the player, the grid
+// built with the heading turned half round and cut to a small diamond and the view's wedge,
+// each point turned back into the forward frame (gridPoint, objPoint); then the
 // view ahead, its edge rays opened to a right angle either side and the squares beyond the
 // view's half width dropped unless within five squares.
 var drawingBehind bool // the back pass is drawing
 
-// viewHalfAngle is the view's half width: the full-width view at the game's zoom shows
-// 59 degrees either side of the heading (x/z up to 1.67), and a little more is kept.
-const viewHalfAngle = 0x2B00
+// viewHalfAngle is the view's half width: at the game's zoom the view 320 wide shows 59
+// degrees either side of the heading (x/z up to 1.67), a wider one more at the same scale,
+// and a little more is kept.
+func viewHalfAngle() int16 {
+	return int16(math.Atan(1.67*float64(xwid)/0x140)*0x10000/(2*math.Pi)) + 0x100
+}
 
 func viewPasses() {
 	setupVars() // the frame's camera looks ahead
 	processGridWith(func() {
-		if PlayerPitch > 0x1000 || PlayerPitch < -0x1000 {
+		if PlayerPitch > 0x1000 || PlayerPitch < -0x1000 || lookingBack() {
 			drawingBehind = true
 			PlayerFacing = int16(uint16(PlayerFacing) + 0x8000)
 			setupVars()
@@ -636,8 +641,18 @@ func openRays() {
 	gvecs[1].dx, gvecs[1].dy = 0x7FF, 0
 }
 
-// cullRearward keeps row 0 within 3 columns of the eye, row 1 within 5, row 2 within 3.
+// lookingBack is whether the view's edge (the frame's heading off the grid's axis, which
+// setupVars keeps within an eighth of a turn, plus its half width) reaches behind the grid's
+// first row.
+func lookingBack() bool {
+	return iabs(int(cPlayer.heading))+int(viewHalfAngle()) > 0x3C00
+}
+
+// cullRearward keeps row 0 within 3 columns of the eye, row 1 within 5, row 2 within 3, and
+// the squares in the view's wedge.
 func cullRearward() {
+	half := float64(viewHalfAngle()) * (2 * math.Pi / 0x10000)
+	look := float64(int16(uint16(cPlayer.heading)+0x8000)) * (2 * math.Pi / 0x10000)
 	for row := 0; row < 17; row++ {
 		lim := -1
 		switch row {
@@ -647,17 +662,31 @@ func cullRearward() {
 			lim = 5
 		}
 		for col := -16; col <= 16; col++ {
-			if col > lim || col < -lim {
+			if (col > lim || col < -lim) && !inWedge(row, col, look, half) {
 				glocs[glocAt(row, col+16)].flags = 0
 			}
 		}
 	}
 }
 
+// inWedge is whether the square at row, col (the eye's column 0) lies partly within half of
+// the direction look (radians off the grid's axis, clockwise).
+func inWedge(row, col int, look, half float64) bool {
+	lo, hi := math.Inf(1), math.Inf(-1)
+	for _, c := range [4][2]int{{0, 0}, {1, 0}, {0, 1}, {1, 1}} {
+		x := float64((col+c[0])<<8 - int(cPlayer.x))
+		y := float64((row+c[1])<<8 - int(cPlayer.y))
+		d := math.Remainder(math.Atan2(x, y)-look, 2*math.Pi)
+		lo, hi = min(lo, d), max(hi, d)
+	}
+	return lo <= half && hi >= -half
+}
+
 // cullForward drops the squares outside the view's half width of the heading, unless
 // |column| + row <= 5.
 func cullForward() {
-	la, ra := cPlayer.heading-viewHalfAngle, cPlayer.heading+viewHalfAngle
+	half := viewHalfAngle()
+	la, ra := cPlayer.heading-half, cPlayer.heading+half
 	ls, lc := cSinCos(int(uint16(la)))
 	rs, rc := cSinCos(int(uint16(ra)))
 	for row := 0; row < 17; row++ {

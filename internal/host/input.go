@@ -64,7 +64,7 @@ var (
 	msPerTick = 1000 / TPS
 )
 
-// Mouse state, in the game's 320x200 screen (top row 0).
+// Mouse state, in the frame's pixels (top row 0).
 var (
 	MouseX, MouseY int
 	MouseMoved     bool
@@ -170,8 +170,8 @@ func pollInput(g *game) {
 		if x < 0 {
 			x = 0
 		}
-		if x > ScreenW-1 {
-			x = ScreenW - 1
+		if x > g.frameW-1 {
+			x = g.frameW - 1
 		}
 		if y < 0 {
 			y = 0

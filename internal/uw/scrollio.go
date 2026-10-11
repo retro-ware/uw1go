@@ -83,10 +83,18 @@ func fontHeight() int {
 
 func cwidth(b []byte) int { return gr.StringWidth(string(b[:cstrlen(b)])) }
 
+// layoutScroll puts the message scroll's left edge at the screen's: on a wide screen it spans
+// the whole width.
+func layoutScroll() {
+	l := leftX(0x0F)
+	mainScroll.top, mainScroll.left, mainScroll.curX = l, l, l
+	inputSetRect(convMenuHndl, l, 1, 0x131, 0x1E)
+}
+
 func initScroll() {
 	scroll = &mainScroll
 	scrollMode = 0
-	drawScroll(0x0F, 0x1E, 0x131, 1, false)
+	drawScroll(leftX(0x0F), 0x1E, 0x131, 1, false)
 	drawEdges()
 }
 
@@ -133,7 +141,7 @@ func scrollWait(ticks int, mouse bool) {
 }
 
 func drawEdges() {
-	picToScreen(edgePhase+ICON_SCRLEDGE, 0x0B, 0x1E)
+	picToScreen(edgePhase+ICON_SCRLEDGE, leftX(0x0B), 0x1E)
 	picToScreen(edgePhase+ICON_SCRLEDGE+5, 0x132, 0x1E)
 	edgePhase++
 	if edgePhase == 5 {

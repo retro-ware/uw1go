@@ -73,7 +73,7 @@ func StringToScreen(s string, x, y int) {
 	if x < WinLeft || x+wd-1 > WinRight || y > WinTop || y-CurFont.Height+1 < WinBottom {
 		return
 	}
-	drawString(Pages[DrawPage][:], W, H, s, x, y, ForegroundColor)
+	drawString(Pages[DrawPage][:], W, H, s, x+OX, y, ForegroundColor)
 }
 
 // ShadowedString draws s one pixel right and down in the shadow colour, then at (x, y).
@@ -81,8 +81,8 @@ func ShadowedString(s string, x, y int) {
 	if CurFont == nil {
 		return
 	}
-	drawString(Pages[DrawPage][:], W, H, s, x+1, y-1, ShadowColor)
-	drawString(Pages[DrawPage][:], W, H, s, x, y, ForegroundColor)
+	drawString(Pages[DrawPage][:], W, H, s, x+OX+1, y-1, ShadowColor)
+	drawString(Pages[DrawPage][:], W, H, s, x+OX, y, ForegroundColor)
 }
 
 // DrawStringInto draws text into any buffer (y up from its bottom).

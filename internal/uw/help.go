@@ -100,6 +100,7 @@ var helpPages = []helpPage{
 		{"Ctrl+R", "restore"},
 		{"F5", "quick save"},
 		{"F7", "quick load"},
+		{"F11", "fullscreen"},
 		{"Ctrl+M", "music"},
 		{"Ctrl+F", "sound"},
 		{"Ctrl+Q", "quit"},
@@ -190,7 +191,7 @@ func showHelpPage() {
 	}
 	mouseHide()
 	gr.GrSoftPageFlip()
-	gr.SetTheWindow(0, 0xC7, 0x13F, 0)
+	gr.FullWindow()
 	gr.Show(0, 0xC7, buf, 0xC8, 0x140, 0, 0)
 	p := &helpPages[helpPageNo]
 	top := func(y int) int { return 0xC7 - y } // the text's top, y down the screen

@@ -11,7 +11,10 @@ package host
 import (
 	"image"
 	"image/color"
+	"math"
 	"os"
+	"runtime"
+	"strconv"
 	"sync/atomic"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -21,14 +24,17 @@ import (
 const (
 	ScreenW = 320
 	ScreenH = 200
+	// MaxW is the widest frame: a 32:9 screen.
+	MaxW = 864
 	// TPS is the host's tick rate; the game clock advances 256 ticks a second.
 	TPS = 70
 )
 
-// Frame is what the host shows: a 320x200 paletted picture (top row first) and its palette
-// of 6-bit VGA values.
+// Frame is what the host shows: a W by 200 paletted picture (top row first) and its
+// palette of 6-bit VGA values. It is 320 wide, or wider for the game screen in a wide window.
 type Frame struct {
 	Pix     []byte
+	W       int // 0 is ScreenW
 	Palette *[768]byte
 	// Cursor is drawn over the frame at the pointer when CursorOn is set; transparent where 0.
 	Cursor     []byte
@@ -43,6 +49,29 @@ type Frame struct {
 
 // ShowFrame returns the frame to present. Set by the game.
 var ShowFrame func() *Frame
+
+// WantW is the frame width that fills the window with the CRT's pixels (the 200 lines
+// shown 240 high): ScreenW for the window, which keeps the 4:3 shape, and as wide as the
+// screen's shape for fullscreen, up to MaxW. UW1GO_WIDTH (or a script's w event) fixes it.
+var (
+	WantW  = ScreenW
+	fixedW bool
+)
+
+func init() {
+	if w, err := strconv.Atoi(os.Getenv("UW1GO_WIDTH")); err == nil {
+		WantW, fixedW = clampW(w), true
+	}
+}
+
+func clampW(w int) int { return min(max(w&^1, ScreenW), MaxW) }
+
+func (f *Frame) width() int {
+	if f.W <= 0 {
+		return ScreenW
+	}
+	return f.W
+}
 
 var (
 	tick     = make(chan struct{})
@@ -92,16 +121,14 @@ func Run(title string, scale int, gameMain func()) error {
 		}()
 		gameMain()
 	}()
-	g := &game{}
-	g.img = ebiten.NewImage(ScreenW, ScreenH)
-	g.rgba = image.NewRGBA(image.Rect(0, 0, ScreenW, ScreenH))
-	return ebiten.RunGame(g)
+	return ebiten.RunGame(&game{})
 }
 
 type game struct {
-	img  *ebiten.Image
-	rgba *image.RGBA
-	// the 320x200 picture's placement on the window, for mapping the pointer
+	img    *ebiten.Image
+	rgba   *image.RGBA
+	frameW int // the shown frame's width
+	// the frame's placement on the window, for mapping the pointer
 	offX, offY, scaleX, scaleY float64
 }
 
@@ -109,6 +136,11 @@ func (g *game) Update() error {
 	if finished.Load() {
 		return ebiten.Termination
 	}
+	if (ebiten.IsKeyPressed(ebiten.KeyAlt) && inpututil.IsKeyJustPressed(ebiten.KeyEnter)) ||
+		inpututil.IsKeyJustPressed(ebiten.KeyF11) {
+		ebiten.SetFullscreen(!ebiten.IsFullscreen())
+	}
+	keepWindowShape()
 	pollInput(g)
 	if scriptQuit {
 		return ebiten.Termination
@@ -140,8 +172,17 @@ func (g *game) Draw(screen *ebiten.Image) {
 		r, gg, b := pal[i*3]&63, pal[i*3+1]&63, pal[i*3+2]&63
 		lut[i] = [4]byte{r<<2 | r>>4, gg<<2 | gg>>4, b<<2 | b>>4, 0xFF}
 	}
+	fw := f.width()
+	if g.img == nil || fw != g.frameW {
+		if g.img != nil {
+			g.img.Deallocate()
+		}
+		g.img = ebiten.NewImage(fw, ScreenH)
+		g.rgba = image.NewRGBA(image.Rect(0, 0, fw, ScreenH))
+		g.frameW = fw
+	}
 	pix := g.rgba.Pix
-	for i, c := range f.Pix[:ScreenW*ScreenH] {
+	for i, c := range f.Pix[:fw*ScreenH] {
 		copy(pix[i*4:i*4+4], lut[c][:])
 	}
 	if f.CursorOn && f.Cursor != nil {
@@ -156,32 +197,52 @@ func (g *game) Draw(screen *ebiten.Image) {
 					continue
 				}
 				sx := f.CursorAtX - f.CursorHotX + x
-				if sx < 0 || sx >= ScreenW {
+				if sx < 0 || sx >= fw {
 					continue
 				}
-				o := (sy*ScreenW + sx) * 4
+				o := (sy*fw + sx) * 4
 				copy(pix[o:o+4], lut[c][:])
 			}
 		}
 	}
 	g.img.WritePixels(pix)
 
-	// Fit a 4:3 picture (320x200 shown as 320x240, the CRT's shape) in the window.
+	// The picture fills the window, without bars: the game screen is as wide as the
+	// window's shape asks (WantW), the other screens, 320 wide, are stretched in a wider one.
 	sw, sh := screen.Bounds().Dx(), screen.Bounds().Dy()
-	aspectW, aspectH := float64(ScreenW), float64(ScreenH)*1.2
-	k := float64(sw) / aspectW
-	if float64(sh)/aspectH < k {
-		k = float64(sh) / aspectH
+	if !fixedW && sw > 0 && sh > 0 {
+		WantW = clampW(int(math.Round(float64(ScreenH) * 1.2 * float64(sw) / float64(sh))))
 	}
-	g.scaleX = k
-	g.scaleY = k * 1.2
-	g.offX = (float64(sw) - aspectW*k) / 2
-	g.offY = (float64(sh) - aspectH*k) / 2
+	g.scaleX = float64(sw) / float64(fw)
+	g.scaleY = float64(sh) / float64(ScreenH)
+	g.offX, g.offY = 0, 0
 	op := &ebiten.DrawImageOptions{}
 	op.GeoM.Scale(g.scaleX, g.scaleY)
-	op.GeoM.Translate(g.offX, g.offY)
 	op.Filter = ebiten.FilterNearest
 	screen.DrawImage(g.img, op)
+}
+
+// keepWindowShape gives the window back the 4:3 shape once a resize has kept still for a
+// sixth of a second: its width stays, its height follows.
+var (
+	lastWinW, lastWinH int
+	winStill           int
+)
+
+func keepWindowShape() {
+	if runtime.GOOS == "js" || ebiten.IsFullscreen() || scriptOn { // a page sizes its canvas itself
+		return
+	}
+	w, h := ebiten.WindowSize()
+	if w != lastWinW || h != lastWinH {
+		lastWinW, lastWinH, winStill = w, h, 0
+		return
+	}
+	if winStill++; winStill == TPS/6 {
+		if want := (w*3 + 2) / 4; w > 0 && (h-want > 1 || want-h > 1) {
+			ebiten.SetWindowSize(w, want)
+		}
+	}
 }
 
 func (g *game) Layout(outsideWidth, outsideHeight int) (int, int) {
@@ -193,6 +254,3 @@ func (g *game) Layout(outsideWidth, outsideHeight int) (int, int) {
 func Exit(code int) {
 	os.Exit(code)
 }
-
-// for inpututil, kept referenced
-var _ = inpututil.IsKeyJustPressed
