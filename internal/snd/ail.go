@@ -43,6 +43,10 @@ type driver struct {
 
 var drv *driver
 
+// musicVol is the desk's music fader (Volume) as the sequences' channel volumes last
+// got it; the effects' notes are scaled by the sfx fader as they are sent.
+var musicVol = 1.0
+
 func (d *driver) has(bank, patch int) bool {
 	return d.installed[bank<<8|patch] || d.b.builtIn(bank, patch)
 }
@@ -126,6 +130,9 @@ func SendVoice(status, d1, d2 int) {
 	defer mu.Unlock()
 	if drv == nil {
 		return
+	}
+	if status&0xF0 == 0x90 && d2 != 0 {
+		d2 = int(float64(d2&0x7F)*Volume("sfx") + 0.5)
 	}
 	drv.b.message(status&0xFF, d1&0x7F, d2&0x7F)
 }
@@ -304,7 +311,7 @@ func SetRelativeVolume(h, pct, ms int) {
 	s.relVol = pct
 	for c := range s.shadow {
 		if s.shadow[c].set && !drv.locked[c] {
-			drv.b.message(0xB0|c, 7, s.shadow[c].vol*pct/100)
+			drv.b.message(0xB0|c, 7, s.vol(c))
 		}
 	}
 }
@@ -339,10 +346,35 @@ func (s *sequence) restore(c int) {
 	}
 	drv.b.message(0xB0|c, 0x72, sh.bank)
 	drv.b.message(0xC0|c, sh.program, 0)
-	drv.b.message(0xB0|c, 7, sh.vol*s.relVol/100)
+	drv.b.message(0xB0|c, 7, s.vol(c))
 	drv.b.message(0xB0|c, 0x0B, sh.expr)
 	drv.b.message(0xB0|c, 0x0A, sh.pan)
 	drv.b.message(0xE0|c, sh.bend&0x7F, sh.bend>>7)
+}
+
+// vol is channel c's volume as sent: the sequence's, scaled by its relative volume and
+// the music fader.
+func (s *sequence) vol(c int) int {
+	return int(float64(min(127, s.shadow[c].vol*s.relVol/100))*musicVol + 0.5)
+}
+
+// fade resends the sequences' channel volumes when the music fader has moved.
+func fade() {
+	g := Volume("music")
+	if g == musicVol || drv == nil {
+		return
+	}
+	musicVol = g
+	for _, s := range drv.seqs {
+		if s == nil {
+			continue
+		}
+		for c := range s.shadow {
+			if s.shadow[c].set && !drv.locked[c] {
+				drv.b.message(0xB0|c, 7, s.vol(c))
+			}
+		}
+	}
 }
 
 func (s *sequence) varlen() int {
@@ -381,10 +413,7 @@ func (s *sequence) send(status, d1, d2 int) {
 		switch d1 {
 		case 7:
 			sh.vol = d2
-			d2 = d2 * s.relVol / 100
-			if d2 > 127 {
-				d2 = 127
-			}
+			d2 = s.vol(c)
 		case 0x0B:
 			sh.expr = d2
 		case 0x0A:

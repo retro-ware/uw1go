@@ -81,6 +81,7 @@ func (stream) Read(buf []byte) (int, error) {
 	}
 	mix := mixBuf[:frames*2]
 	clear(mix)
+	fade()
 	if drv != nil {
 		for f := 0; f < frames; {
 			n := (outRate - tickAcc + 119) / 120
@@ -99,6 +100,7 @@ func (stream) Read(buf []byte) (int, error) {
 			}
 		}
 	}
+	sg := Volume("sfx") // speech
 	for f := 0; f < frames; f++ {
 		l, r := mix[f*2], mix[f*2+1]
 		if speech != nil {
@@ -106,7 +108,7 @@ func (stream) Read(buf []byte) (int, error) {
 			if i >= len(speech) {
 				speech = nil
 			} else {
-				v := (int(speech[i]) - 128) << 7
+				v := int(float64((int(speech[i])-128)<<7) * sg)
 				l += v
 				r += v
 				speechAt += float64(speechHz) / outRate
