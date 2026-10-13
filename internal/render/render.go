@@ -98,13 +98,14 @@ const (
 	fillTrans
 )
 
-// Load reads the data segment from UW.EXE's load image.
-func Load(exe []byte) (*Renderer, error) {
+// Load reads the data segment from UW.EXE's load image, shift bytes past where the
+// listing has it (see the uw package's exeShift).
+func Load(exe []byte, shift int) (*Renderer, error) {
 	if len(exe) < 0x20 || exe[0] != 'M' || exe[1] != 'Z' {
 		return nil, errors.New("render: UW.EXE is not an MZ executable")
 	}
 	hdr := (int(exe[8]) | int(exe[9])<<8) * 16
-	start := hdr + 0x4723*16
+	start := hdr + 0x4723*16 + shift
 	if start+0x10000 > len(exe) {
 		return nil, errors.New("render: UW.EXE is too short")
 	}

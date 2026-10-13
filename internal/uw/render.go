@@ -29,7 +29,7 @@ func initRenderer() {
 			pfatal(err.Error())
 		}
 	}
-	r, err := render.Load(exeImage)
+	r, err := render.Load(exeImage, exeShift)
 	if err != nil {
 		pfatal(err.Error())
 	}
