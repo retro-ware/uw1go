@@ -114,6 +114,7 @@ const (
 	fillFlat fillMode = iota
 	fillGouraud
 	fillTrans
+	fillConcave // flat, for polygons that may be concave
 )
 
 // Load reads the models from UW.EXE, whose data lies shift bytes past where the release

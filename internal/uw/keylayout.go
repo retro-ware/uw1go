@@ -29,12 +29,12 @@ const (
 // extendedKeys are the scan codes that follow E0 (the 101-key keyboard's extra keys), in
 // the order the driver numbers them from extendedBase.
 var extendedKeys = [16]byte{
-	70, // Ctrl-Break
-	28, // keypad Enter
-	29, // right Ctrl
-	53, // keypad /
-	55, // Print Screen
-	56, // right Alt
+	70,                                     // Ctrl-Break
+	28,                                     // keypad Enter
+	29,                                     // right Ctrl
+	53,                                     // keypad /
+	55,                                     // Print Screen
+	56,                                     // right Alt
 	71, 72, 73, 75, 77, 79, 80, 81, 82, 83, // the grey Home, Up, PgUp, Left, Right, End, Down, PgDn, Ins, Del
 }
 

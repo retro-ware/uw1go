@@ -1,6 +1,10 @@
 package render
 
-import "math"
+import (
+	"cmp"
+	"math"
+	"slices"
+)
 
 // vtx is a polygon's vertex: the view-space point and what is interpolated across the
 // polygon (s a shade, u and t the texture's column and byte offset).
@@ -54,7 +58,10 @@ type span struct {
 }
 
 // scan projects a polygon and calls row for each of its screen rows.
-func (r *Renderer) scan(poly []vtx, row func(y int, s span)) {
+func (r *Renderer) scan(poly []vtx, row func(y int, s span)) { r.scanFill(poly, false, row) }
+
+// scanFill is scan, filling a concave polygon by the even-odd rule when concave.
+func (r *Renderer) scanFill(poly []vtx, concave bool, row func(y int, s span)) {
 	if len(poly) < 3 {
 		return
 	}
@@ -79,9 +86,14 @@ func (r *Renderer) scan(poly []vtx, row func(y int, s span)) {
 	}
 	y0 := max(int(math.Ceil(top-0.5)), 0)
 	y1 := min(int(math.Ceil(bot-0.5)), r.H)
+	type crossing struct {
+		x float64
+		a [4]float64
+	}
+	var xs []crossing
 	for y := y0; y < y1; y++ {
 		yc := float64(y) + 0.5
-		s := span{x0: math.Inf(1), x1: math.Inf(-1)}
+		xs = xs[:0]
 		for i := range ps {
 			a, b := &ps[i], &ps[(i+1)%len(ps)]
 			if a.y == b.y || yc < min(a.y, b.y) || yc >= max(a.y, b.y) {
@@ -91,20 +103,23 @@ func (r *Renderer) scan(poly []vtx, row func(y int, s span)) {
 				a, b = b, a
 			}
 			k := (yc - a.y) / (b.y - a.y)
-			x := a.x + (b.x-a.x)*k
-			var at [4]float64
-			for j := range at {
-				at[j] = a.a[j] + (b.a[j]-a.a[j])*k
+			c := crossing{x: a.x + (b.x-a.x)*k}
+			for j := range c.a {
+				c.a[j] = a.a[j] + (b.a[j]-a.a[j])*k
 			}
-			if x < s.x0 {
-				s.x0, s.a0 = x, at
-			}
-			if x > s.x1 {
-				s.x1, s.a1 = x, at
-			}
+			xs = append(xs, c)
 		}
-		if s.x1 > s.x0 {
-			row(y, s)
+		if len(xs) < 2 {
+			continue
+		}
+		slices.SortFunc(xs, func(p, q crossing) int { return cmp.Compare(p.x, q.x) })
+		if !concave { // one span from the leftmost crossing to the rightmost
+			xs = []crossing{xs[0], xs[len(xs)-1]}
+		}
+		for i := 0; i+1 < len(xs); i += 2 { // the inside runs between pairs of crossings
+			if xs[i+1].x > xs[i].x {
+				row(y, span{xs[i].x, xs[i+1].x, xs[i].a, xs[i+1].a})
+			}
 		}
 	}
 }
@@ -142,6 +157,11 @@ func (r *Renderer) polygon(poly []vtx) {
 	case fillFlat:
 		c := r.colour
 		r.scan(poly, func(y int, s span) {
+			r.pixels(y, s, func(i, _ int, _, _, _ float64) { fb[i] = c })
+		})
+	case fillConcave:
+		c := r.colour
+		r.scanFill(poly, true, func(y int, s span) {
 			r.pixels(y, s, func(i, _ int, _, _, _ float64) { fb[i] = c })
 		})
 	case fillGouraud:

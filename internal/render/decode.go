@@ -390,9 +390,9 @@ func (d *decoder) step(pc int) (s Step, next int, done bool, err error) {
 	case opTranslucentFill:
 		return SetFill{FillTranslucent}, pc, false, nil
 	case opCaveFill:
-		// The original selects a fill routine here that was never traced; the parts that
-		// use it are left out (as the interpreter port did).
-		return Stop{"cave fill"}, pc, true, nil
+		// the original's cave (concave) fill, for the 8-point side faces of benches,
+		// shrines, chests and chairs
+		return SetFill{FillConcave}, pc, false, nil
 
 	case opPolygon, opPolygonB:
 		n := d.word(pc)

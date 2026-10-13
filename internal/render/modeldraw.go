@@ -219,6 +219,8 @@ func (s SetFill) draw(r *Renderer) bool {
 		}
 	case FillTranslucent:
 		r.fill = fillTrans
+	case FillConcave:
+		r.fill = fillConcave
 	}
 	return false
 }

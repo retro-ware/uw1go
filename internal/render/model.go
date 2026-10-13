@@ -66,6 +66,7 @@ const (
 	FillShaded                        // the current colour shaded by each point's shade (Gouraud)
 	FillShadedOrPick                  // shaded, or flat in the pick colour in a pick frame
 	FillTranslucent                   // darkening what is behind by the points' shades
+	FillConcave                       // flat in the current colour, the polygon maybe concave
 )
 
 // The steps.
@@ -214,8 +215,7 @@ type (
 	// to variable VarSlotHeight's value.
 	SetSlotHeight struct{}
 
-	// Stop ends the part: what the decoder could not read (Why says what), or the
-	// original's unfinished cave fill.
+	// Stop ends the part: what the decoder could not read (Why says what).
 	Stop struct{ Why string }
 )
 
