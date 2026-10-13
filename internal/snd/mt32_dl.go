@@ -21,15 +21,15 @@ var mt32Libs = []string{
 }
 
 var mtAPI struct {
-	loaded       bool
-	createCtx    func(handler, data uintptr) uintptr
-	addROMFile   func(ctx uintptr, name string) int32
-	setRate      func(ctx uintptr, rate float64)
-	openSynth    func(ctx uintptr) int32
-	playMsgNow   func(ctx uintptr, msg uint32)
-	playSysexNow func(ctx uintptr, sysex *byte, n uint32)
-	render       func(ctx uintptr, out *int16, frames uint32)
-	version      func() string
+	loaded     bool
+	createCtx  func(handler, data uintptr) uintptr
+	addROMFile func(ctx uintptr, name string) int32
+	setRate    func(ctx uintptr, rate float64)
+	openSynth  func(ctx uintptr) int32
+	playMsg    func(ctx uintptr, msg uint32)
+	playSysex  func(ctx uintptr, sysex *byte, n uint32)
+	render     func(ctx uintptr, out *int16, frames uint32)
+	version    func() string
 }
 
 func loadMT32Lib() error {
@@ -50,8 +50,8 @@ func loadMT32Lib() error {
 	purego.RegisterLibFunc(&mtAPI.addROMFile, lib, "mt32emu_add_rom_file")
 	purego.RegisterLibFunc(&mtAPI.setRate, lib, "mt32emu_set_stereo_output_samplerate")
 	purego.RegisterLibFunc(&mtAPI.openSynth, lib, "mt32emu_open_synth")
-	purego.RegisterLibFunc(&mtAPI.playMsgNow, lib, "mt32emu_play_msg_now")
-	purego.RegisterLibFunc(&mtAPI.playSysexNow, lib, "mt32emu_play_sysex_now")
+	purego.RegisterLibFunc(&mtAPI.playMsg, lib, "mt32emu_play_msg")
+	purego.RegisterLibFunc(&mtAPI.playSysex, lib, "mt32emu_play_sysex")
 	purego.RegisterLibFunc(&mtAPI.render, lib, "mt32emu_render_bit16s")
 	purego.RegisterLibFunc(&mtAPI.version, lib, "mt32emu_get_library_version_string")
 	mtAPI.loaded = true
@@ -92,6 +92,6 @@ func mtOpen(romDir string) error {
 	return nil
 }
 
-func mtMsg(msg uint32)   { mtAPI.playMsgNow(mtCtx, msg) }
-func mtSysex(msg []byte) { mtAPI.playSysexNow(mtCtx, &msg[0], uint32(len(msg))) }
+func mtMsg(msg uint32)   { mtAPI.playMsg(mtCtx, msg) }
+func mtSysex(msg []byte) { mtAPI.playSysex(mtCtx, &msg[0], uint32(len(msg))) }
 func mtRender(b []int16) { mtAPI.render(mtCtx, &b[0], uint32(len(b)/2)) }
