@@ -326,8 +326,8 @@ func doDoor(item int, o *Object) {
 				txtwal(nil, locsqmod, byte(objyloc>>6), byte(wall))
 			}
 			rend.SetTextureHeight(cTmBm, (cTmDm*cTmDm>>8)*h-1)
-			rend.SetVar(7, cTmDm*cTmDm-1)
-			rend.SetVar(6, render.TextureHeightVar(cTmBm))
+			rend.SetVar(render.VarSlotHeight, cTmDm*cTmDm-1)
+			rend.SetVar(render.VarSlot, cTmBm)
 			if PickUp != 0 {
 				rend.SetPickColour(byte(wall + PICK_WALL))
 			}

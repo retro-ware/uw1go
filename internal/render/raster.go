@@ -159,20 +159,20 @@ func (r *Renderer) polygon(poly []vtx) {
 // texPoly draws a polygon textured from a slot: flat in the current colour when the
 // model variable polym is set, and shaded by distance when smooth_over is.
 func (r *Renderer) texPoly(slot int, poly []vtx) {
-	if r.R16(varPolym) != 0 || slot >= slotCount || r.slots[slot] == nil {
+	if r.vars[VarFlat] != 0 || slot < 0 || slot >= slotCount || r.slots[slot].pix == nil {
 		c := r.colour
 		r.scan(poly, func(y int, s span) {
 			r.pixels(y, s, func(i, _ int, _, _, _ float64) { fb := r.FB; fb[i] = c })
 		})
 		return
 	}
-	tex := r.slots[slot]
-	w := int(r.R16(slotTab + slot*8))
-	mask := int(r.R16(slotTab + slot*8 + 6))
+	tex := r.slots[slot].pix
+	w := r.slots[slot].width
+	mask := r.slots[slot].rowMask
 	if w <= 0 {
 		return
 	}
-	smooth := r.R16(varSmooth) != 0
+	smooth := r.vars[VarSmooth] != 0
 	if smooth {
 		for i := range poly {
 			v := poly[i].v

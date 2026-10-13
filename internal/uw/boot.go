@@ -32,7 +32,6 @@ func Main() {
 		fmt.Fprintln(os.Stderr, err)
 		return
 	}
-	initMath()
 	uwMain()
 }
 

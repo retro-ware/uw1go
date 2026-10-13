@@ -3,10 +3,9 @@
 // The game draws a frame square by square, farthest first: it starts the frame (Begin), and
 // places the corners of floors, ceilings and walls (Point), which it fills flat or with a
 // texture; it stands sprites at points and calls the 3D models (doors, tables, pillars ...).
-// UW.EXE holds the models as bytecode programs; this package runs them, reading them and
-// the renderer's tables from the data segment it loads from UW.EXE (seg051), and draws
-// with floating point view geometry, clipping and perspective-correct texture mapping
-// into a frame buffer of its own.
+// The models come from UW.EXE, decoded once into Go values (model.go, decode.go); the
+// package draws with floating point view geometry, clipping and perspective-correct
+// texture mapping into a frame buffer of its own.
 package render
 
 import (
@@ -14,19 +13,38 @@ import (
 	"math"
 )
 
-// Offsets in the data segment.
+// The screen's shape: the height a pixel row stands for against a column's width.
+const pixelAspect = 27197.0 / 32768
+
+// Sprites stand by the original's sprite records: an object's anchor (its picture's
+// hot spot), and the scales for objects' and critters' pictures.
 const (
-	slotTab    = 0xB07E // the bitmap slots, 8 bytes each: width, v limit, texture, row mask
-	slotCount  = 7
-	objRecord  = 0xB0D2 // do_uwobj's sprite record (+6, +8 hot spot, +0A, +0C scale)
-	critRecord = 0xB0C4 // do_uwcrit's
-	aspectWord = 0x15F4 // the screen's shape, 1.15
-	varBase    = 0x2920 // the model variables, a word each (GRIDDB.C's Clk(n))
-	varPick    = 0x2932 // model variables (GRIDDB.C's Clk slots): a pick frame
-	varPolym   = 0x2930 // textured faces drawn flat
-	varSmooth  = 0x2928 // distance shading of textured faces
-	varShade   = 0x2934 // the shade added by do_uwcolv and do_uwshade
+	objectHotX, objectHotY = 8, 16
+	spriteScaleX           = 4
+	spriteScaleY           = 5
 )
+
+// textureSlot is one of the places the game puts the textures it draws with.
+type textureSlot struct {
+	width   int
+	vlimit  int // the last byte offset quads map to (lower walls map less)
+	rowMask int // the byte offsets rows wrap to (the hallucination effect scrambles it)
+	pix     []byte
+}
+
+// slotCount is how many texture slots there are: two each of 16, 32 and 64 wide for the
+// walls and floors, and one for an object's picture.
+const slotCount = 7
+
+var initialSlots = [slotCount]textureSlot{
+	{width: 16, vlimit: 16*16 - 1, rowMask: 16 * 15},
+	{width: 16, vlimit: 16*16 - 1, rowMask: 16 * 15},
+	{width: 32, vlimit: 32*32 - 1, rowMask: 32 * 31},
+	{width: 32, vlimit: 32*32 - 1, rowMask: 32 * 31},
+	{width: 64, vlimit: 64*64 - 1, rowMask: 64 * 63},
+	{width: 64, vlimit: 64*64 - 1, rowMask: 64 * 63},
+	{width: 64, vlimit: 64*96 - 1, rowMask: 64 * 127},
+}
 
 // Pic is a picture: one byte per pixel, rows top first, 0 transparent.
 type Pic struct {
@@ -50,9 +68,10 @@ type mat3 [3][3]float64
 
 // Renderer is the 3D view's state.
 type Renderer struct {
-	// Mem is the data segment: the database, the models, the model variables and the
-	// renderer's tables.
-	Mem []byte
+	models  []*Model
+	vars    [numVars]int16
+	slots   [slotCount]textureSlot
+	context int // the slot ContextTextured faces take
 
 	// The frame buffer, W by H, top row first.
 	FB   []byte
@@ -78,7 +97,6 @@ type Renderer struct {
 	obj      vec3 // the eye in the current object's frame
 	objShift int
 	pts      [nPoints]point
-	slots    [slotCount][]byte
 	colour   byte
 	fill     fillMode
 	gourBase byte
@@ -98,35 +116,39 @@ const (
 	fillTrans
 )
 
-// Load reads the data segment from UW.EXE's load image, shift bytes past where the
-// listing has it (see the uw package's exeShift).
+// Load reads the models from UW.EXE, whose data lies shift bytes past where the release
+// the listing was made from has it.
 func Load(exe []byte, shift int) (*Renderer, error) {
-	if len(exe) < 0x20 || exe[0] != 'M' || exe[1] != 'Z' {
+	if len(exe) < 32 || exe[0] != 'M' || exe[1] != 'Z' {
 		return nil, errors.New("render: UW.EXE is not an MZ executable")
 	}
-	hdr := (int(exe[8]) | int(exe[9])<<8) * 16
-	start := hdr + 0x4723*16 + shift
-	if start+0x10000 > len(exe) {
+	header := (int(exe[8]) | int(exe[9])<<8) * 16
+	start := header + dataSegmentParagraph*16 + shift
+	if start < 0 || start+dataSegmentSize > len(exe) {
 		return nil, errors.New("render: UW.EXE is too short")
 	}
-	r := &Renderer{Mem: make([]byte, 0x10000), pixMode: 1, zoom: 0x6062, smoothDiv: 1}
-	copy(r.Mem, exe[start:start+0x10000])
+	models, err := decodeModels(exe[start : start+dataSegmentSize])
+	if err != nil {
+		return nil, err
+	}
+	r := &Renderer{models: models, slots: initialSlots, context: noSlot, pixMode: 1, zoom: defaultZoom, smoothDiv: 1}
 	for i := 0; i < 16; i++ {
 		for c := 0; c < 256; c++ {
 			r.lightabs[i<<8|c] = byte(c)
 		}
 	}
-	r.Resize(0xAC, 0x71)
+	r.Resize(defaultWidth, defaultHeight)
 	return r, nil
 }
 
-// R16 and W16 read and write a word of the data segment.
-func (r *Renderer) R16(off int) uint16 { return uint16(r.Mem[off]) | uint16(r.Mem[off+1])<<8 }
-func (r *Renderer) W16(off int, v uint16) {
-	r.Mem[off] = byte(v)
-	r.Mem[off+1] = byte(v >> 8)
-}
-func (r *Renderer) s16(off int) int { return int(int16(r.R16(off))) }
+// The original's view: its window's size and zoom (1.15).
+const (
+	defaultWidth, defaultHeight = 172, 113
+	defaultZoom                 = 24674
+)
+
+// nPoints is the size of the point table (doors keep deltas as points 128 and 256).
+const nPoints = 8192
 
 // Resize sets the frame buffer's size.
 func (r *Renderer) Resize(w, h int) {
@@ -224,7 +246,7 @@ func (r *Renderer) setupView() {
 	r.projX = float64(r.W >> 1)
 	r.projY = float64(r.H >> 1)
 	scale := vec3{1, 1, 1}
-	k := float64(r.s16(aspectWord)) / 32768
+	k := pixelAspect
 	if t := float64(int(k * r.projX)); t > r.projY {
 		scale[0] = r.projY / t
 	} else if t < r.projY {

@@ -5,24 +5,19 @@ import (
 	"fmt"
 )
 
-// The game's own data in UW.EXE: tables the C reads from the data segments (the keyboard's
-// scan code tables, the 3D models, ...), read from the user's copy at start-up so the port
-// holds no game data. A segment:offset of the listing is file offset
-// header + segment*16 + offset, the MZ header being 800 paragraphs.
+// UW.EXE holds the 3D models (doors, tables, ...), which internal/render decodes into its
+// own representation. Nothing else is read from it.
 
 var exeImage []byte
 
-// exeShift is how far this UW.EXE's data lies past the listing's: the 1992 floppy
-// release has more code before it (0x16A0 bytes), the data itself is the same. It is
-// found from the keyboard's character table (seg063:0010), which starts Esc 1 2 3 ...
+// exeShift is how far this UW.EXE's data lies past the GOG copy's: the 1992 floppy
+// release has more code before it, the data itself is the same. It is found from a
+// string both carry, the keyboard's character row (Esc 1 2 3 ...).
 var exeShift int
 
-const exeHeader = 800 * 16
-
-// Segments of UW1's EXE used here.
 const (
-	segSeg063 = 0x5624 // seg019's data: the keyboard tables
-	segDGROUP = 0x5AAC
+	exeHeader     = 800 * 16 // the MZ header, 800 paragraphs
+	keyRowAtInGOG = 365648   // where that string lies in the GOG copy
 )
 
 func loadExe() error {
@@ -40,15 +35,6 @@ func loadExe() error {
 	if i < 0 {
 		return fmt.Errorf("UW.EXE: no keyboard table (not UW1?)")
 	}
-	exeImage, exeShift = b, i-(exeHeader+segSeg063*16+0x10)
+	exeImage, exeShift = b, i-keyRowAtInGOG
 	return nil
-}
-
-// exeBytes returns n bytes of the EXE at seg:off.
-func exeBytes(seg, off, n int) []byte {
-	o := exeHeader + seg*16 + off + exeShift
-	if o < 0 || o+n > len(exeImage) {
-		panic(fmt.Sprintf("exeBytes %04X:%04X+%d outside UW.EXE", seg, off, n))
-	}
-	return exeImage[o : o+n]
 }

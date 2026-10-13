@@ -17,8 +17,12 @@ var (
 	frameStart time.Time // when the frame being drawn began
 )
 
-// segSeg048 is the graphics library's data, where the distance shading's defaults are.
-const segSeg048 = 0x3963
+// The distance shading's defaults, until a light level's shades (lighting.go) set it.
+const (
+	defaultSmoothDiv     = 6
+	defaultSmoothBase    = 0
+	defaultSmoothLowpass = 0
+)
 
 func initRenderer() {
 	if rend != nil {
@@ -35,10 +39,7 @@ func initRenderer() {
 	}
 	rend = r
 	render.Debugf = dprintf
-	d := exeBytes(segSeg048, 0x64C, 6)
-	smoothDiv = int16(le16(d, 0))
-	smoothBase = int16(le16(d, 2))
-	smoothLowpass = int16(le16(d, 4))
+	smoothDiv, smoothBase, smoothLowpass = defaultSmoothDiv, defaultSmoothBase, defaultSmoothLowpass
 	rend.SetLightTabs(lightabs[:])
 	rend.SetSmooth(int(smoothDiv), int(smoothBase), int(smoothLowpass))
 }

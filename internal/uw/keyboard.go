@@ -2,35 +2,25 @@ package uw
 
 import "github.com/memmaker/uw1go/internal/host"
 
-// Port of KEYQUEUE.ASM (with KBDINT.ASM's Caps Lock toggle): the keyboard driver. Scan codes
-// come from host.KeyRing; E0-prefixed keys become 60h plus their place in the table at
-// seg063:0288; each key's down count is kept in keyOn; the six modifier states are worked
-// out from the layout's key tables; and characters come from the Asc table at seg063:0010
-// (scan code, plus 80h when Shift is down). The tables are read from UW.EXE.
+// The keyboard driver (the original's KEYQUEUE.ASM, with its Caps Lock toggle): scan
+// codes come from host.KeyRing as a PC keyboard sends them (set 1); keys sent after an
+// E0 prefix are kept from extendedBase on; each key's down count is kept in keyOn; the
+// modifiers' states come from their keys (keylayout.go); and characters from ascTab.
 
 var (
-	ascTab    [256]byte // seg063:0010
-	e0Tab     [16]byte  // seg063:0288
-	modKeyA   [6]int    // seg063:0299 + layout, per modifier
-	modKeyB   [6]int    // seg063:02A1 + layout
-	keyOn     [256]byte // seg063:01EB, indexed by scan code
-	modifiers [6]byte   // seg063:01E2: Shift, Alt, Ctrl, and three more
-	capsLock  byte      // seg063:01E8, bit 0
-	keyRepeat bool      // seg063:01E0: let the hardware repeat through
+	keyOn     [256]byte // by scan code (extended keys from extendedBase)
+	modifiers [6]byte   // Shift, Alt, Ctrl, and three more (modKeyA, modKeyB)
+	capsLock  byte      // bit 0
+	keyRepeat bool      // let the keyboard's own repeat through
 )
 
-// kbdLayout is seg063:01E9: 2, an enhanced 101/102-key keyboard, as every keyboard now is.
-const kbdLayout = 2
-
-func initKeyboard() {
-	copy(ascTab[:], exeBytes(segSeg063, 0x10, 256))
-	copy(e0Tab[:], exeBytes(segSeg063, 0x288, 16))
-	t := exeBytes(segSeg063, 0x299, 0x70)
-	for m := 0; m < 6; m++ {
-		modKeyA[m] = int(le16(t, kbdLayout+0x10*m))
-		modKeyB[m] = int(le16(t, 8+kbdLayout+0x10*m))
-	}
-}
+// The scan code protocol.
+const (
+	prefixExtended = 224 // E0: an extended key follows
+	prefixPause    = 225 // E1: Pause, two more bytes
+	releaseBit     = 128 // set on a key's release
+	shiftedChars   = 128 // ascTab's shifted half
+)
 
 func shiftDown() bool { return modifiers[0] != 0 }
 func altDown() bool   { return modifiers[1] != 0 }
@@ -46,8 +36,8 @@ func kbdNext() (byte, bool) {
 }
 
 func updateModifiers() {
-	for m := 0; m < 6; m++ {
-		modifiers[m] = keyOn[modKeyA[m]&0xFF] | keyOn[modKeyB[m]&0xFF]
+	for m := range modifiers {
+		modifiers[m] = keyOn[modKeyA[m]] | keyOn[modKeyB[m]]
 	}
 }
 
@@ -60,21 +50,22 @@ func KEY() int {
 		if !ok {
 			return 0
 		}
-		if c == 0xE1 {
+		switch c {
+		case prefixPause:
 			kbdNext()
 			kbdNext()
-			c = 0xE0
-		} else if c == 0xE0 {
+			c = prefixExtended
+		case prefixExtended:
 			b, ok := kbdNext()
 			if !ok {
 				return 0
 			}
-			k := b & 0x7F
-			if k == 0x2A || k == 0x36 {
+			k := b &^ releaseBit
+			if k == scanLeftShift || k == scanRightShift { // the fake shifts some keys send
 				continue
 			}
 			i := -1
-			for j, e := range e0Tab {
+			for j, e := range extendedKeys {
 				if e == k {
 					i = j
 					break
@@ -83,24 +74,24 @@ func KEY() int {
 			if i < 0 {
 				continue
 			}
-			c = b&0x80 | byte(0x60+i)
-		} else if c == 0x3A {
+			c = b&releaseBit | byte(extendedBase+i)
+		case scanCapsLock:
 			capsLock ^= 1
 		}
-		bx := int(c & 0x7F)
-		if c&0x80 != 0 {
-			keyOn[bx] = 0
+		key := int(c &^ releaseBit)
+		if c&releaseBit != 0 {
+			keyOn[key] = 0
 			updateModifiers()
 			continue
 		}
-		if !keyRepeat && keyOn[bx] != 0 {
+		if !keyRepeat && keyOn[key] != 0 {
 			continue
 		}
-		keyOn[bx]++
-		if modifiers[0] != 0 {
-			bx |= 0x80
+		keyOn[key]++
+		ch := ascTab[key]
+		if shiftDown() {
+			ch = ascTab[key+shiftedChars]
 		}
-		ch := ascTab[bx]
 		updateModifiers()
 		return int(ch) | int(c)<<8
 	}
@@ -109,7 +100,7 @@ func KEY() int {
 // isModifierKey: keyOn's index i is one of the modifiers (Shift, Alt, Ctrl, ...).
 func isModifierKey(i int) bool {
 	for m := range modKeyA {
-		if i == modKeyA[m]&0xFF || i == modKeyB[m]&0xFF {
+		if i == modKeyA[m] || i == modKeyB[m] {
 			return true
 		}
 	}

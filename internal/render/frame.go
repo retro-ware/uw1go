@@ -32,9 +32,9 @@ func (r *Renderer) Begin(pick, flat, smooth bool) {
 	r.fill = fillFlat
 	r.colour = 0
 	r.SetPickMode(pick)
-	r.SetVar(9, b2i(pick))
-	r.SetVar(8, b2i(flat))
-	r.SetVar(4, b2i(smooth))
+	r.SetVar(VarPick, b2i(pick))
+	r.SetVar(VarFlat, b2i(flat))
+	r.SetVar(VarSmooth, b2i(smooth))
 }
 
 func b2i(b bool) int {
@@ -64,42 +64,52 @@ func (r *Renderer) Polygon(c byte, vs ...Vertex) {
 	r.polygon(vtxs(vs))
 }
 
-// SetVar sets model variable n (GRIDDB.C's Clk(n)), which the models read.
-func (r *Renderer) SetVar(n, v int) { r.W16(varBase+2*n, uint16(v)) }
+// SetVar sets model variable n (the Var constants), which the models read.
+func (r *Renderer) SetVar(n, v int) {
+	if n >= 0 && n < numVars {
+		r.vars[n] = int16(v)
+	}
+}
 
 // SetTexture puts a texture's pixels into a slot.
 func (r *Renderer) SetTexture(slot int, pix []byte) {
 	if slot >= 0 && slot < slotCount {
-		r.slots[slot] = pix
+		r.slots[slot].pix = pix
 	}
 }
 
 // SetTextureHeight sets a slot's v limit: the last byte offset its quads map to, which is
 // shorter than the texture for walls lower than a square.
 func (r *Renderer) SetTextureHeight(slot, vlimit int) {
-	r.W16(slotTab+slot*8+2, uint16(vlimit))
+	if slot >= 0 && slot < slotCount {
+		r.slots[slot].vlimit = int(uint16(vlimit))
+	}
 }
-
-// TextureHeightVar is the model variable address of a slot's v limit, for models that set
-// it (the door frame is handed its slot's).
-func TextureHeightVar(slot int) int { return slotTab + slot*8 + 2 }
 
 // SetRowMask sets a slot's row mask, the byte offsets a texture's rows wrap to (the
 // hallucination effect scrambles them).
-func (r *Renderer) SetRowMask(slot, mask int) { r.W16(slotTab+slot*8+6, uint16(mask)) }
+func (r *Renderer) SetRowMask(slot, mask int) {
+	if slot >= 0 && slot < slotCount {
+		r.slots[slot].rowMask = int(uint16(mask))
+	}
+}
 
 // SetContext makes slot the one the models' context mapped faces take.
-func (r *Renderer) SetContext(slot int) { r.setCtxt(slot) }
+func (r *Renderer) SetContext(slot int) { r.context = slot }
 
 // TexQuad draws a quad textured from slot, each vertex at a corner of the texture (bit 0
 // the right edge, 2 the bottom).
 func (r *Renderer) TexQuad(slot int, vs [4]Vertex, corners [4]int) {
-	r.cornerPoly(slot, vtxs(vs[:]), corners[:])
+	cs := make([]Corner, 4)
+	for i, c := range corners {
+		cs[i] = Corner{Right: c%2 != 0, Bottom: c >= 2}
+	}
+	r.cornerPoly(slot, vtxs(vs[:]), cs)
 }
 
 // WallQuad draws a quad textured from slot going round the texture from its top left.
 func (r *Renderer) WallQuad(slot int, vs [4]Vertex) {
-	r.cornerPoly(slot, vtxs(vs[:]), compactCorners[:])
+	r.cornerPoly(slot, vtxs(vs[:]), compactCorners)
 }
 
 // SetPickColour sets the colour pick frames draw the next object in.
@@ -108,13 +118,13 @@ func (r *Renderer) SetPickColour(c byte) { r.bmcolor = c }
 // ObjectSprite stands an object's picture at v, by the object sprite record's hot spot
 // and scales.
 func (r *Renderer) ObjectSprite(v Vertex, pic Pic) {
-	pic.HotX, pic.HotY = int(r.Mem[objRecord+6]), int(r.Mem[objRecord+8])
-	r.sprite(v.v, pic, r.s16(objRecord+0x0A), r.s16(objRecord+0x0C))
+	pic.HotX, pic.HotY = objectHotX, objectHotY
+	r.sprite(v.v, pic, spriteScaleX, spriteScaleY)
 }
 
 // CritterSprite stands a critter's frame at v, by its own hot spot.
 func (r *Renderer) CritterSprite(v Vertex, pic Pic) {
-	r.sprite(v.v, pic, r.s16(critRecord+0x0A), r.s16(critRecord+0x0C))
+	r.sprite(v.v, pic, spriteScaleX, spriteScaleY)
 }
 
 // SetDelta keeps an offset of y up as point n, which the door models add to their own.
@@ -122,22 +132,9 @@ func (r *Renderer) SetDelta(n, y int) {
 	r.pts[n%nPoints].v = r.rotate(vec3{0, float64(y), 0})
 }
 
-// modelTable is the models' entry points: model n's is the word at modelTable + 2n, its
-// offset from the database's start (seg051:2938) times two.
-const (
-	dbStart    = 0x2938
-	modelTable = dbStart - 2*76
-	modelCount = 64
-)
-
-// Model runs UW.EXE's 3D model n standing at x, y, z, turned by heading.
+// Model draws 3D model n standing at x, y, z, turned by heading.
 func (r *Renderer) Model(n, x, y, z int, heading int16) {
-	if n < 0 || n >= modelCount {
-		r.complain("render: no model %d\n", n)
-		return
-	}
-	w := int16(r.R16(modelTable + 2*n))
-	if w == -1 {
+	if n < 0 || n >= len(r.models) || r.models[n] == nil {
 		r.complain("render: no model %d\n", n)
 		return
 	}
@@ -146,6 +143,6 @@ func (r *Renderer) Model(n, x, y, z int, heading int16) {
 	if heading != 0 {
 		r.turn(heading)
 	}
-	r.run((dbStart + 2*int(uint16(w>>1))) & 0xFFFF)
+	r.drawPart(r.models[n].Body)
 	r.m, r.obj = m, o
 }

@@ -1,27 +1,35 @@
 package uw
 
+import "math"
+
 // IMATH.ASM and C3DENTRY.ASM's maths entries: the table sine and cosine, the square root
-// and atan2, with the tables read from seg063 of UW.EXE. Angles are a full turn in 0x10000;
-// sines are 1.15 fixed point.
+// and atan2. Angles are a full turn in 65536; sines are 1.15 fixed point. The tables are
+// the original's (UW.EXE's seg063), which these formulas give exactly.
 
 var (
-	sinTab  []int16 // seg063:04E0, 0x141 entries; the cosine table is the same from 0x40 on
-	asinTab []int16 // seg063:0762
-	acosTab []int16 // seg063:0864
+	sinTab  = sineTable()         // a 256th of a turn apart, and on: cosines are 64 entries in
+	asinTab = arcTable(math.Asin) // of 0, 1/128 ... 1
+	acosTab = arcTable(math.Acos)
 )
 
-func initMath() {
-	rd := func(off, n int) []int16 {
-		b := exeBytes(segSeg063, off, n*2)
-		t := make([]int16, n)
-		for i := range t {
-			t[i] = int16(le16(b, i*2))
-		}
-		return t
+// sineTable is the sine of each 256th of a turn, rounded, over a turn and a quarter (so
+// that cosines can be read 64 entries on) and two more for the interpolation.
+func sineTable() []int16 {
+	t := make([]int16, 256+64+2)
+	for i := range t {
+		v := math.Round(math.Sin(2*math.Pi*float64(i)/256) * 32768)
+		t[i] = int16(min(max(v, -32767), 32767))
 	}
-	sinTab = rd(0x4E0, 0x142)
-	asinTab = rd(0x762, 0x81)
-	acosTab = rd(0x864, 0x81)
+	return t
+}
+
+// arcTable is f of 0, 1/128 ... 1 as an angle (a full turn in 65536), truncated.
+func arcTable(f func(float64) float64) []int16 {
+	t := make([]int16, 129)
+	for i := range t {
+		t[i] = int16(f(float64(i)/128) * 65536 / (2 * math.Pi))
+	}
+	return t
 }
 
 // interp is the tables' linear step: base + ((next - base) * frac) >> 8, in 16 bits.
