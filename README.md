@@ -74,10 +74,14 @@ chosen with environment variables:
 | `UW1GO_SPEECH` | `1` to `3`: the cutscene speech (Sound Blaster digital) |
 | `UW1GO_MT32_ROMS` | the folder with the MT-32 control and PCM ROMs (default `./roms`) |
 
-The AdLib cards run on an OPL2 emulator with the game's own instruments
-from `SOUND\UW.AD`. The MT-32 uses [munt](https://github.com/munt/munt)'s
-libmt32emu, loaded at run time (`brew install mt32emu`; no cgo needed), with
-ROMs you supply. Without the library or the ROMs it falls back to AdLib.
+The AdLib cards run on an OPL2 emulator,
+[github.com/memmaker/opl2](https://github.com/memmaker/opl2), with the game's
+own instruments from `SOUND\UW.AD`. The MT-32 uses
+[munt](https://github.com/munt/munt)'s libmt32emu, loaded at run time
+(`brew install mt32emu`; no cgo needed), with ROMs you supply: the original
+MT-32's (control ROM 1.04 to 1.07) are preferred, as the game was written for
+it, then a CM-32L's or a 2.x MT-32's. Without the library or the ROMs it falls
+back to AdLib.
 The PC speaker is not emulated.
 
 ## In the browser

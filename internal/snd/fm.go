@@ -1,6 +1,10 @@
 package snd
 
-import "math"
+import (
+	"math"
+
+	"github.com/memmaker/opl2"
+)
 
 // The AdLib backend: the AIL AdLib driver's work on the emulated OPL2. MIDI channels are
 // mapped onto the 9 FM voices; a note takes a free voice, else the oldest released one,
@@ -35,7 +39,7 @@ type voice struct {
 }
 
 type fmSynth struct {
-	chip                     *opl
+	chip                     *opl2.Chip
 	ch                       [16]midiChan
 	v                        [9]voice
 	timbres                  map[int][]byte
@@ -46,10 +50,10 @@ type fmSynth struct {
 }
 
 func newFM(stereo bool) *fmSynth {
-	d := &fmSynth{chip: newOPL(), timbres: map[int][]byte{}, stereo: stereo}
-	d.chip.write(0x01, 0x20)
-	d.chip.write(0x08, 0x00)
-	d.chip.write(0xBD, 0x00)
+	d := &fmSynth{chip: opl2.New(), timbres: map[int][]byte{}, stereo: stereo}
+	d.chip.Write(0x01, 0x20)
+	d.chip.Write(0x08, 0x00)
+	d.chip.Write(0xBD, 0x00)
 	for i := range d.ch {
 		d.resetChannel(i)
 		d.ch[i].vol = 127
@@ -200,28 +204,34 @@ func (d *fmSynth) keyOff(i int) {
 	v := &d.v[i]
 	v.keyed = false
 	v.sustained = false
-	d.chip.write(0xB0+i, d.chip.regs[0xB0+i]&^0x20)
+	d.chip.Write(0xB0+i, d.chip.Reg(0xB0+i)&^0x20)
 }
 
 func (d *fmSynth) keyOffNow(i int) {
-	d.chip.write(0xB0+i, d.chip.regs[0xB0+i]&^0x20)
+	d.chip.Write(0xB0+i, d.chip.Reg(0xB0+i)&^0x20)
 }
 
 // opBase is the register offset of voice i's modulator; the carrier's is 3 more.
 func opBase(i int) int { return slotReg[chSlot[i]] }
 
+var (
+	// the register offset of each operator slot, and each channel's first slot
+	slotReg = [18]int{0, 1, 2, 3, 4, 5, 8, 9, 10, 11, 12, 13, 16, 17, 18, 19, 20, 21}
+	chSlot  = [9]int{0, 1, 2, 6, 7, 8, 12, 13, 14}
+)
+
 func (d *fmSynth) setTimbre(i int) {
 	t := d.v[i].timbre
 	m := opBase(i)
-	d.chip.write(0x20+m, t[3])
-	d.chip.write(0x60+m, t[5])
-	d.chip.write(0x80+m, t[6])
-	d.chip.write(0xE0+m, t[7])
-	d.chip.write(0xC0+i, t[8])
-	d.chip.write(0x20+m+3, t[9])
-	d.chip.write(0x60+m+3, t[11])
-	d.chip.write(0x80+m+3, t[12])
-	d.chip.write(0xE0+m+3, t[13])
+	d.chip.Write(0x20+m, t[3])
+	d.chip.Write(0x60+m, t[5])
+	d.chip.Write(0x80+m, t[6])
+	d.chip.Write(0xE0+m, t[7])
+	d.chip.Write(0xC0+i, t[8])
+	d.chip.Write(0x20+m+3, t[9])
+	d.chip.Write(0x60+m+3, t[11])
+	d.chip.Write(0x80+m+3, t[12])
+	d.chip.Write(0xE0+m+3, t[13])
 	d.setLevel(i)
 }
 
@@ -239,11 +249,11 @@ func (d *fmSynth) setLevel(i int) {
 	}
 	m := opBase(i)
 	if t[8]&1 != 0 {
-		d.chip.write(0x40+m, lvl(t[4]))
+		d.chip.Write(0x40+m, lvl(t[4]))
 	} else {
-		d.chip.write(0x40+m, t[4])
+		d.chip.Write(0x40+m, t[4])
 	}
-	d.chip.write(0x40+m+3, lvl(t[10]))
+	d.chip.Write(0x40+m+3, lvl(t[10]))
 }
 
 func (d *fmSynth) updateLevels(c int) {
@@ -273,7 +283,7 @@ func (d *fmSynth) setPitch(i int, key bool) {
 	note += float64(d.ch[v.ch].bend-0x2000) / 0x2000 * defPitchRange
 	f := 440 * math.Pow(2, (note-69)/12)
 	block := 0
-	fnum := f * (1 << 20) / oplRate
+	fnum := f * (1 << 20) / opl2.Rate
 	for fnum >= 1024 && block < 7 {
 		block++
 		fnum /= 2
@@ -282,18 +292,18 @@ func (d *fmSynth) setPitch(i int, key bool) {
 		fnum = 1023
 	}
 	n := int(fnum)
-	d.chip.write(0xA0+i, byte(n))
+	d.chip.Write(0xA0+i, byte(n))
 	b := byte(n>>8&3) | byte(block<<2)
 	if key {
 		b |= 0x20
 	}
-	d.chip.write(0xB0+i, b)
+	d.chip.Write(0xB0+i, b)
 }
 
 // render runs the chip one sample: the mono sum, and its left and right when stereo.
 func (d *fmSynth) sample() (l, r int) {
-	var out [9]int
-	d.chip.sample(&out)
+	var out [opl2.Channels]int
+	d.chip.SampleChannels(&out)
 	for i, s := range out {
 		if !d.stereo {
 			l += s
@@ -309,8 +319,7 @@ func (d *fmSynth) sample() (l, r int) {
 	for i := range d.v {
 		v := &d.v[i]
 		if v.active && !v.keyed {
-			m := &d.chip.ops[chSlot[i]+3]
-			if m.eg >= 511 {
+			if d.chip.Silent(i) {
 				v.active = false
 			}
 		}
@@ -342,7 +351,7 @@ func (d *fmSynth) release(c int) {
 
 // render adds frames of output, resampled from the chip's rate, into out (stereo pairs).
 func (d *fmSynth) render(out []int, frames int) {
-	step := float64(oplRate) / outRate
+	step := float64(opl2.Rate) / outRate
 	for f := 0; f < frames; f++ {
 		d.pos += step
 		for d.pos >= 1 {

@@ -5,6 +5,8 @@ import (
 	"math"
 	"os"
 	"testing"
+
+	"github.com/memmaker/opl2"
 )
 
 // TestRender renders a theme offline to $UW1GO_WAV (if set) and checks it is not silent.
@@ -86,7 +88,7 @@ func TestPitch(t *testing.T) {
 	SendVoice(0xC0, 5, 0)
 	SendVoice(0x90, 69, 127)
 	var prev, cross int
-	n := oplRate
+	n := opl2.Rate
 	for i := 0; i < n; i++ {
 		l, _ := fm.sample()
 		if i > 1000 && (prev < 0) != (l < 0) {
@@ -94,7 +96,7 @@ func TestPitch(t *testing.T) {
 		}
 		prev = l
 	}
-	f := float64(cross) / 2 * float64(oplRate) / float64(n-1000)
+	f := float64(cross) / 2 * float64(opl2.Rate) / float64(n-1000)
 	t.Logf("A4 measured %.1f Hz", f)
 	if f < 435 || f > 445 {
 		t.Fail()

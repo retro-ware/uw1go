@@ -1,3 +1,8 @@
+// Package snd is the sound hardware and driver layer under SOUND.C: a YM3812 (OPL2) FM
+// emulator (github.com/memmaker/opl2), the Miles AIL XMIDI driver's job on it (timbres
+// from the game's UW.AD library, voice allocation, channel locking, the 120 Hz XMIDI
+// sequencer), a digitised .VOC player for the speech, and the mixer that feeds Ebiten's
+// audio.
 package snd
 
 import (

@@ -16,8 +16,11 @@ func mtOpen(romDir string) error {
 	if g.IsUndefined() || g.Get("ready").IsUndefined() || !g.Call("ready").Bool() {
 		return errors.New("the page has no MT-32 emulator")
 	}
-	if err := g.Call("open", romDir, outRate); err.Truthy() {
-		return errors.New(err.String())
+	// the old generation first (UW1 was written for the original MT-32), else the new
+	if err := g.Call("open", romDir, outRate, "old"); err.Truthy() {
+		if g.Call("open", romDir, outRate, "new").Truthy() {
+			return errors.New(err.String())
+		}
 	}
 	mtJS = g
 	return nil
