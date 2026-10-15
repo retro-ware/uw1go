@@ -102,6 +102,7 @@ func onlineTick() {
 	}
 	if synced {
 		questTick()
+		givesTick(now)
 	}
 	for _, m := range online.Events() {
 		onlineEvent(m)
@@ -173,6 +174,12 @@ func onlineEvent(m mp.Msg) {
 		animEvent(m)
 	case "quest", "questall":
 		questEvent(m)
+	case "give":
+		if m.Level == PlayerLevel {
+			takeGift(m)
+		}
+	case "given":
+		givenEvent(m)
 	case "hurt":
 		takeHurt(m)
 	case "talkto":

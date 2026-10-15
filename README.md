@@ -131,4 +131,6 @@ is suffered by its player. A conversation opens for both: the one who started
 it runs it, the other sees it and may answer too. Quest flags, game variables
 and conversations' variables are shared when they change (flags merge bit by
 bit; where both change the same thing at once, the host's word stands), and
-both keep the same list of running animations.
+both keep the same list of running animations. Dropping something you carry
+on the other player gives it to them, with what is inside it: it goes into
+their pack (or hand, or at their feet when it does not fit).
