@@ -38,6 +38,7 @@ GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "-s -w -H windowsgui" -o "
 cp -R gamedata/UW "$win/gamedata/UW"
 (cd "$out" && zip -qr "uw1go-$tag-windows.zip" "uw1go-$tag-windows")
 
+[ -n "$NOPUBLISH" ] && exit 0
 gh release create "$tag" --title "$tag" \
 	--notes "Ready to play, game included. macOS: unzip and open Ultima Underworld.app (first time: right-click → Open). Windows: unzip and run uw1.exe. F11 toggles fullscreen. Multiplayer: Host/Join a game online, or set the server to none to play over the LAN (port 7781)." \
 	"$out/uw1go-$tag-macos.zip" "$out/uw1go-$tag-windows.zip"
