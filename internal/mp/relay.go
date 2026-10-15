@@ -3,7 +3,9 @@
 package mp
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"log"
 	"net"
 	"net/http"
@@ -13,12 +15,12 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
-	"github.com/coder/websocket/wsjson"
 )
 
+// peer is a connection; what goes out to it is JSON, the game's messages as they came.
 type peer struct {
 	num int
-	out chan Msg
+	out chan []byte
 }
 
 // Relay keeps the rooms: each a map of player number to peer.
@@ -74,12 +76,12 @@ func (r *Relay) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	c.SetReadLimit(readLimit)
-	p := &peer{out: make(chan Msg, 512)}
+	p := &peer{out: make(chan []byte, 512)}
 	ctx, cancel := context.WithCancel(req.Context())
 	defer cancel()
 	go func() {
 		for m := range p.out {
-			if wsjson.Write(ctx, c, m) != nil {
+			if c.Write(ctx, websocket.MessageText, m) != nil {
 				cancel()
 				return
 			}
@@ -98,16 +100,21 @@ func (r *Relay) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			if len(r.rooms[room]) == 0 {
 				delete(r.rooms, room)
 			}
-			r.broadcast(room, p, Msg{Op: "left", From: p.num})
+			r.broadcast(room, p, encode(Msg{Op: "left", From: p.num}))
 		}
 		r.mu.Unlock()
 		close(p.out)
 		c.CloseNow()
 	}()
 	for {
-		var m Msg
-		if wsjson.Read(ctx, c, &m) != nil {
+		_, raw, err := c.Read(ctx)
+		if err != nil {
 			return
+		}
+		raw = bytes.TrimSpace(raw)
+		var m struct{ Op, Room string }
+		if json.Unmarshal(raw, &m) != nil || len(raw) < 2 || raw[len(raw)-1] != '}' {
+			continue
 		}
 		r.mu.Lock()
 		switch m.Op {
@@ -145,10 +152,11 @@ func (r *Relay) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 				ps[p.num] = p
 				r.reply(p, Msg{Op: "joined", Room: room, From: p.num})
 			}
-		default:
+		default: // the game's: passed on as it is, with the sender's number (the last "from" counts)
 			if room != "" {
-				m.From = p.num
-				r.broadcast(room, p, m)
+				from, _ := json.Marshal(p.num)
+				fwd := append(append(append(raw[:len(raw)-1:len(raw)-1], `,"from":`...), from...), '}')
+				r.broadcast(room, p, fwd)
 			}
 		}
 		r.mu.Unlock()
@@ -156,17 +164,24 @@ func (r *Relay) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 }
 
 // reply and broadcast drop messages for a peer too slow to take them.
-func (r *Relay) reply(p *peer, m Msg) {
+func (r *Relay) reply(p *peer, m Msg) { r.send(p, encode(m)) }
+
+func encode(m Msg) []byte {
+	b, _ := json.Marshal(m)
+	return b
+}
+
+func (r *Relay) send(p *peer, m []byte) {
 	select {
 	case p.out <- m:
 	default:
 	}
 }
 
-func (r *Relay) broadcast(room string, from *peer, m Msg) {
+func (r *Relay) broadcast(room string, from *peer, m []byte) {
 	for _, q := range r.rooms[room] {
 		if q != from {
-			r.reply(q, m)
+			r.send(q, m)
 		}
 	}
 }

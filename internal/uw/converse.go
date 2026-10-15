@@ -153,7 +153,13 @@ func strtConverse() {
 	mouseShow()
 	pmouseHandled = 0
 	mouseFreereign()
-	Converse(int(talkingTo.Whoami), talkingTo.InMajor())
+	if convWatching {
+		watchConverse()
+	} else {
+		convMirror(convStart, "")
+		Converse(int(talkingTo.Whoami), talkingTo.InMajor())
+		convMirror(convEnd, "")
+	}
 	newscr(1)
 }
 
@@ -243,6 +249,7 @@ func Converse(who, subclass int) {
 // menusActive has been cleared it reprints the options.
 func converseEventLoop() {
 	for convoContinue {
+		onlineTick() // the other player's pick may come
 		loopMusicMaybe()
 		if changed != 0 {
 			doChanges()
@@ -256,6 +263,7 @@ func converseEventLoop() {
 			}
 			doMainScroll()
 			menusActive = true
+			convMirrorMenu()
 		}
 		inputDispatch(inplist)
 	}
@@ -281,6 +289,7 @@ func showMenu() {
 	doMainScroll()
 	convoContinue = true
 	menusActive = true
+	convMirrorMenu()
 	converseEventLoop()
 }
 
@@ -348,12 +357,17 @@ func convPlayMenu(option int) {
 	if selected <= 0 || selected >= bablOptCount {
 		return
 	}
+	if convWatching {
+		watchPick(selected)
+		return
+	}
 	convoMode = 0
 	convoContinue = false
 	mouseRelease(false)
 	doPlayScroll()
 	scrollClear(true)
 	doMainScroll()
+	convMirror(convPicked, "")
 	menusActive = false
 	doNpcScroll()
 	playSay(bablDisplay[selected])
@@ -366,6 +380,7 @@ func npcSay(s string) {
 	doNpcScroll()
 	scrollPrint("\\P" + s + "\n")
 	doMainScroll()
+	convMirror(convNpcScroll, "\\P"+s+"\n")
 	convoSayFlag = false
 }
 
@@ -374,6 +389,7 @@ func playRespond(s string) {
 	doPlayScroll()
 	scrollPrint(s + "\n")
 	doMainScroll()
+	convMirror(convPlayScroll, s+"\n")
 	convoSayFlag = true
 }
 
@@ -382,14 +398,17 @@ func playSay(s string) {
 	doNpcScroll()
 	scrollPrint("\\1" + s + "\\0\n")
 	doMainScroll()
+	convMirror(convNpcScroll, "\\1"+s+"\\0\n")
 	convoSayFlag = true
 }
 
 // convPrint is print(arg1 string): narration, in colour 2.
 func convPrint(top int) {
 	doNpcScroll()
-	scrollPrint("\\2" + convertString(getString(bargv(top, 1))) + "\\0\n")
+	text := "\\2" + convertString(getString(bargv(top, 1))) + "\\0\n"
+	scrollPrint(text)
 	doMainScroll()
+	convMirror(convNpcScroll, text)
 }
 
 // convPause is pause(arg1).

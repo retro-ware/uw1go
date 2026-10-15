@@ -573,7 +573,13 @@ func critTalk() {
 		setHtx(head)
 		if dist < 0x90 {
 			rel := (ThePlayer.HeadingBits() + 8 - int(head)) & 7
-			if rel >= 3 && rel <= 5 {
+			if mytarget != ThePlayer {
+				rel = (mytarget.HeadingBits() + 8 - int(head)) & 7
+			}
+			if rel >= 3 && rel <= 5 && mytarget != ThePlayer {
+				proxyTalkTo(int(myid))
+				critterSetGoal(GOAL_STAND, 0)
+			} else if rel >= 3 && rel <= 5 {
 				pmouseHandled = 0
 				mouseFreereign()
 				TalkTo(meptr)
@@ -815,7 +821,7 @@ func critterAi() bool {
 	mycst = &Creatures[meptr.InMajor()]
 	myxpos = meptr.HomeX()
 	myypos = meptr.HomeY()
-	plyr := ObjIntTMem(1)
+	plyr := targetPlayer()
 	px := int(int8(plyr.HomeX()))
 	py := int(int8(plyr.HomeY()))
 	ex, ey := int(int8(myxpos))-lastXeye, int(int8(myypos))-lastYeye
@@ -1048,7 +1054,11 @@ func critterReact(targeted *bool) {
 // setUpTarget loads the target globals from the critter's goal target; false if the
 // target is dead.
 func setUpTarget() bool {
-	mytarget = ObjIntTMem(meptr.GTarg())
+	if meptr.GTarg() == 1 { // online, either player
+		mytarget = targetPlayer()
+	} else {
+		mytarget = ObjIntTMem(meptr.GTarg())
+	}
 	if mytarget.HP == 0 {
 		return false
 	}

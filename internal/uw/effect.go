@@ -18,9 +18,8 @@ var (
 	DoAnimO   = true
 	animcount int
 	animlist  [MAX_ANIMS]Anim
-	// animMine marks the animations this player started (online play: those that came
-	// with the level are its owner's, onlineOwnsLevel)
-	animMine [MAX_ANIMS]bool
+	// animWho says who runs each animation online (onlineanim.go)
+	animWho [MAX_ANIMS]int8
 )
 
 // remAnimFromMap removes animation n's object from its tile and frees it.
@@ -40,10 +39,7 @@ func remAnimFromList(index int) {
 		}
 	}
 	if i < animcount {
-		if animcount--; animcount > 0 && animcount != i {
-			animlist[i] = animlist[animcount]
-			animMine[i] = animMine[animcount]
-		}
+		animDrop(i)
 	}
 }
 
@@ -92,9 +88,7 @@ func toastAnimobj(n, frames int) {
 	if typ&ANIMF_REMOVE != 0 {
 		remAnimFromMap(n)
 	}
-	if animcount--; animcount > 0 && animcount != n {
-		animlist[n] = animlist[animcount]
-	}
+	animDrop(n)
 }
 
 // changeAnimPtr: the animation of from now belongs to to.
@@ -103,6 +97,7 @@ func changeAnimPtr(to, from *Object) {
 	for i := 0; i < animcount; i++ {
 		if animlist[i].link.Index() == fromidx {
 			animlist[i].link.SetIndex(toidx)
+			animSendMoved(i, fromidx, toidx)
 			break
 		}
 	}
@@ -129,7 +124,8 @@ func addAnimobj(index, length, a, x, y int) int {
 		}
 	}
 	AnimObjInPipe = 1
-	animMine[animcount] = true
+	animWho[animcount] = animOurs
+	animSendAdded(animcount)
 	animcount++
 	return animcount
 }
@@ -180,7 +176,7 @@ func updateAnimobj(frames int) {
 		editchng(2)
 	}
 	for i := 0; i < animcount; i++ {
-		if !animMine[i] && !onlineOwnsLevel() {
+		if !animRunsHere(i) {
 			continue // the other player runs it
 		}
 		if animlist[i].len == -1 {
@@ -363,7 +359,7 @@ func AnimLoad(arc *Arc, level int) bool {
 		}
 	}
 	animcount = count
-	animMine = [MAX_ANIMS]bool{}
+	animWho = [MAX_ANIMS]int8{}
 	return true
 }
 

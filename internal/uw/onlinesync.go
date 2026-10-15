@@ -33,8 +33,7 @@ import (
 //   - A player arriving on a level where the other is asks for it and loads it as it is
 //     now; one leaving a level sends it as saved, for the other's LEV.ARK.
 //
-// Quest flags and conversations' variables are still each player's own, and creatures
-// do not see the other player.
+//   - Creatures see the other player by their stand-in (onlinepeer.go).
 
 const (
 	syncLen   = 0x7300 // the level block's map and object records
@@ -101,8 +100,18 @@ func onlineTick() {
 		}
 		syncSnap = cur
 	}
+	if synced {
+		questTick(now)
+	}
 	for _, m := range online.Events() {
 		onlineEvent(m)
+	}
+	if !convWatching && !convoWorkspace { // conversations open after the events taken with them
+		if i := convTalkNpc; i != 0 && scrmode == 1 {
+			convTalkNpc = 0
+			TalkTo(&Level.Objs[i])
+		}
+		convWatchMaybe()
 	}
 	debugWorldDump(now)
 }
@@ -113,10 +122,12 @@ func onlineEvent(m mp.Msg) {
 		if online.Me != 0 {
 			return
 		}
+		online.Send(mp.Msg{Op: "questall", Data: questState()})
 		for l := 1; l <= 9; l++ {
 			msg := mp.Msg{Op: "init", Level: l, Seq: sentSeq}
 			if l == PlayerLevel {
 				msg.Data, msg.Anim = liveLevelBlock()
+				msg.Slots = animOurList()
 			} else {
 				msg.Data, msg.Anim = savedLevelBlock(l)
 			}
@@ -127,7 +138,7 @@ func onlineEvent(m mp.Msg) {
 	case "want":
 		if m.Level == PlayerLevel && synced {
 			data, anim := liveLevelBlock()
-			online.Send(mp.Msg{Op: "level", Level: m.Level, Data: data, Anim: anim, Seq: sentSeq})
+			online.Send(mp.Msg{Op: "level", Level: m.Level, Data: data, Anim: anim, Seq: sentSeq, Slots: animOurList()})
 		}
 	case "init", "level", "saved":
 		// init: the host's world for a joiner; level: a level as it is now, asked for;
@@ -140,6 +151,7 @@ func onlineEvent(m mp.Msg) {
 		writeLevelBlock(m.Level, m.Data, m.Anim)
 		if current {
 			reloadLevel()
+			animTheirList(m.Slots)
 			seenSeq = m.Seq // the sender's diffs from here on are news
 			synced = true
 		}
@@ -157,6 +169,18 @@ func onlineEvent(m mp.Msg) {
 				}
 			}
 		}
+	case "animadd", "animrem", "animptr":
+		animEvent(m)
+	case "quest", "questall":
+		questEvent(m)
+	case "hurt":
+		takeHurt(m)
+	case "talkto":
+		if len(m.Slots) == 1 && m.Level == PlayerLevel && m.Slots[0] > 1 && m.Slots[0] < NUM_MOBILE {
+			convTalkNpc = m.Slots[0]
+		}
+	case "conv", "convpick":
+		convEvent(m)
 	case "left":
 		editchng(2)
 	}
@@ -175,6 +199,7 @@ func recordRange(i int) (int, int) {
 func ownObjects() *[NUM_OBJECTS]bool {
 	var own [NUM_OBJECTS]bool
 	own[1] = true
+	own[proxySlot] = true
 	var walk func(l Link)
 	walk = func(l Link) {
 		for i := l.Index(); i > 0 && i < NUM_OBJECTS && !own[i]; {
@@ -196,13 +221,15 @@ func ownObjects() *[NUM_OBJECTS]bool {
 	return &own
 }
 
-// withoutPlayer runs f with the player object out of its tile's list, as the level is
+// withoutPlayer runs f with the player object (and the other player's stand-in) out of its tile's list, as the level is
 // saved. It goes back at the head of the list.
 func withoutPlayer(f func()) {
 	if GrSq >= 0 {
 		ObjRem(&Level.Tiles[GrSq].Objects, ThePlayer)
 		defer ObjAdd(&Level.Tiles[GrSq].Objects, ThePlayer)
 	}
+	unlinkProxy()
+	defer linkProxy()
 	f()
 }
 

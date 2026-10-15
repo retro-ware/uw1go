@@ -43,6 +43,7 @@ type Msg struct {
 	Ack   int      `json:"ack,omitempty"`
 	Data  []byte   `json:"data,omitempty"`
 	Anim  []byte   `json:"anim,omitempty"`
+	Text  string   `json:"text,omitempty"`
 }
 
 // Pos is where a player is: the level, the place in the game's units (x and y in 1/256
@@ -54,6 +55,7 @@ type Pos struct {
 	Z       int16 `json:"z"`
 	Heading int16 `json:"h"`
 	Moving  bool  `json:"m,omitempty"`
+	HP      byte  `json:"hp,omitempty"`
 }
 
 // Client is one connection to the relay.

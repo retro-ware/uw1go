@@ -124,5 +124,8 @@ go run ./cmd/uw1 -relay ws://127.0.0.1:7781 -data /path/to/UW
 `deploy/relay/install.sh` installs the relay on the server as a systemd
 socket-activated service that exits when idle.
 
-Not shared yet: creatures neither see nor fight the other player, and
-conversations and quest flags stay each player's own.
+Creatures go for the nearer player (those that fight from afar, the weaker),
+and what they do to the other player is suffered there. A conversation opens
+for both: the one who started it runs it, the other sees it and may answer
+too. Quest flags, game variables and conversations' variables are shared, and
+both keep the same list of running animations.

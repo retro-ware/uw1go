@@ -71,7 +71,7 @@ func objLoc() (int, int) {
 
 // doObj draws one object.
 func doObj(o *Object) {
-	if o == ThePlayer || o.Invis() == 1 {
+	if o == ThePlayer || o.Invis() == 1 || isProxy(ObjMemTPtr(o)) { // the other player: drawPeers
 		return
 	}
 	if PickUp != 0 {

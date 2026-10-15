@@ -373,7 +373,8 @@ func ObjectCheck(flat, useflag bool) {
 			for link := &Level.Tiles[ti].Objects; link.Index() != 0 && n < 0x40; n++ {
 				obj := ObjPtrTMem(link)
 				next := &obj.QN
-				if link.Index() == int(curP.index) {
+				if link.Index() == int(curP.index) || isProxy(link.Index()) && curP.index <= 1 {
+					// the other player bars creatures, not this player or what it drops
 					link = next
 					continue
 				}

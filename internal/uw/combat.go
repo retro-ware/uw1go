@@ -260,7 +260,14 @@ func doDamage(typ int) {
 	if hitobj == 1 && player.Easy != 0 {
 		ddone >>= 1
 	}
-	result := damageItem(def, ObjIntTMem(fromwho), targx, targy, ddone, typ)
+	var result bool
+	if isProxy(hitobj) { // the other player: suffered there, and only from creatures
+		if fromwho > 1 && fromwho < NUM_MOBILE {
+			hurtProxy(ddone, typ)
+		}
+	} else {
+		result = damageItem(def, ObjIntTMem(fromwho), targx, targy, ddone, typ)
+	}
 	if ddone == 0 || fromwho == -1 {
 		return
 	}
@@ -350,7 +357,7 @@ func doAttack() bool {
 	if !resolveAttack() {
 		return doMiss(0)
 	}
-	if fromwho != 1 && hitobj != 1 && IsMobElem(ObjIntTMem(hitobj)) &&
+	if fromwho != 1 && hitobj != 1 && !isProxy(hitobj) && IsMobElem(ObjIntTMem(hitobj)) &&
 		ObjIntTMem(hitobj).Ally()^ObjIntTMem(fromwho).Ally() == 0 {
 		return false
 	}
@@ -616,7 +623,9 @@ func critterAttack(npc *Object, swing, charge, typ, poison int) bool {
 		askill += rand()%6 + 7
 		damage += rand()%12 + 4
 	}
+	hurtPoison = poison
 	result := doAttack()
+	hurtPoison = 0
 	if result && hitobj == 1 && player.Poison() < poison {
 		if checkRes(ThePlayer, 1, DMG_POISON) != 0 {
 			player.SetPoison(poison)
