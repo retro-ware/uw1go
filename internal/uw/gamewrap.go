@@ -26,7 +26,7 @@ func initSave() bool {
 // GetLevel loads level from SAVE0's LEV.ARK: the map and objects, with the player's
 // inventory kept aside meanwhile, then its texture map, its automap and its creatures.
 func GetLevel(level int) int {
-	forgetProxy()
+	forgetAvatar()
 	SavePlayerInv("")
 	if GrSq >= 0 {
 		GrSq = -1
@@ -52,7 +52,8 @@ func GetLevel(level int) int {
 
 // SaveLevel writes level back into SAVE0's LEV.ARK, without the player's inventory.
 func SaveLevel(level int) bool {
-	removeProxy()
+	removeAvatar()
+	dropPeerAvatars()
 	SavePlayerInv("")
 	FreePlayerInv(&ThePlayer.OL)
 	if GrSq >= 0 {

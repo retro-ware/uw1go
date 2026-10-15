@@ -706,6 +706,7 @@ func babRun() int {
 		}
 	}
 	clearDynamics(STRBLK_DYNAMIC)
+	questChanged()
 	babGlobals(bablMem, bablNvars, true)
 	return 1
 }

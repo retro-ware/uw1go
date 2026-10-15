@@ -63,6 +63,7 @@ func xTraps(top int) int {
 	v := bargv(top, 2) & 0x3F
 	val := bargv(top, 1)
 	if val >= 0 && val <= 0x3F {
+		questChanged()
 		player.GameVars[v] = byte(val)
 	}
 	return int(player.GameVars[v])
@@ -130,6 +131,7 @@ func removeTalker() {
 // setQuest is set_quest(arg2 quest, arg1 value): 0..31 bits of one long (the bit an int
 // widened with its sign, so 15 also sets 16..31 and higher bits do nothing), 32..35 bytes.
 func setQuest(top int) {
+	questChanged()
 	quest := bargv(top, 2)
 	val := bargv(top, 1)
 	if quest < 0 {

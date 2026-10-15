@@ -6,45 +6,54 @@ import (
 	"github.com/memmaker/uw1go/internal/mp"
 )
 
-// The other player: where they are goes out 20 times a second while it changes (and once
-// a second regardless), and they are drawn as the adventurer (a creature the game has
-// pictures for but never places), standing or walking in eight directions.
+// The players in each other's world. Each player has an avatar on the level it is on: an
+// adventurer (a creature the game has pictures for but never places), in a mobile slot of
+// its own, standing where the player stands, facing their way, with their hit points,
+// standing or walking. It is an object of the level like any other, so the level's sync
+// takes it to the other player, where it is drawn, bars the way, is what creatures go for
+// and what their blows and missiles meet; what hurts it there is sent to its player to be
+// suffered. In its own player's world it is left alone: the player object is the player
+// there. It is never active (no AI moves it), and it leaves with its player.
+//
+// Where each player is, and their avatar's slot, also goes out 20 times a second while it
+// changes (and once a second regardless): it says who is on which level.
 
 const (
-	peerItem     = ITEM_ADVENTURER
 	posEvery     = 50 * time.Millisecond
 	posKeepAlive = time.Second
-	peerStepTime = 150 * time.Millisecond // a walking step of the adventurer's four
-	peerNear     = 0x30                   // closer than this (1/256 tiles) is not drawn
+	avatarStep   = 150 * time.Millisecond // a walking step of the adventurer's four
 )
 
 type peerState struct {
 	mp.Pos
-	step   int
-	stepAt time.Time
+	gone int // their avatar's slot on this level, to take away once they left it
 }
 
 var (
 	peers    = map[int]*peerState{}
 	lastPos  mp.Pos
 	lastPosT time.Time
+
+	avatarSlot int // this player's avatar; 0 none
+	avatarSq   int
+	avatarAt   time.Time // its last walking step
+	hurtPoison int       // the poison of the creature's blow being dealt
 )
 
-// peersTick sends this player's place and takes the others'; the view is redrawn when
-// one of them moved or stepped.
+// peersTick sends this player's place, takes the others' and keeps the avatars.
 func peersTick(now time.Time) {
-	p := mp.Pos{Level: PlayerLevel, X: PN.X, Y: PN.Y, Z: PN.Z, Heading: PlayerFacing, HP: ThePlayer.HP}
+	placeAvatar(now)
+	p := mp.Pos{Level: PlayerLevel, X: PN.X, Y: PN.Y, Z: PN.Z, Heading: PlayerFacing, HP: ThePlayer.HP, Avatar: avatarSlot}
 	p.Moving = p.X != lastPos.X || p.Y != lastPos.Y
 	if (p != lastPos && now.Sub(lastPosT) >= posEvery) || now.Sub(lastPosT) >= posKeepAlive {
 		online.Send(mp.Msg{Op: "pos", Pos: &p})
 		lastPos, lastPosT = p, now
 	}
 	others := online.Others()
-	redraw := false
-	for n := range peers {
+	for n, ps := range peers {
 		if _, ok := others[n]; !ok {
+			dropAvatar(ps.gone)
 			delete(peers, n)
-			redraw = true
 		}
 	}
 	for n, o := range others {
@@ -53,134 +62,175 @@ func peersTick(now time.Time) {
 			ps = &peerState{}
 			peers[n] = ps
 		}
-		if ps.Pos != o {
-			ps.Pos = o
-			redraw = true
+		ps.Pos = o
+		here := 0
+		if o.Level == PlayerLevel {
+			here = o.Avatar
 		}
-		if o.Moving && now.Sub(ps.stepAt) >= peerStepTime {
-			ps.step = (ps.step + 1) % 4
-			ps.stepAt = now
-			redraw = true
-		} else if !o.Moving && ps.step != 0 {
-			ps.step = 0
-			redraw = true
+		if ps.gone != here {
+			dropAvatar(ps.gone)
+			ps.gone = here
 		}
-	}
-	placeProxy()
-	if redraw {
-		editchng(2)
 	}
 }
 
-// The other player in this player's world: a creature record of the player's own type,
-// in a mobile slot of this player's, linked into the tile where the other stands but not
-// active (nothing moves it but placeProxy) and never sent (onlinesync.go leaves it out
-// like the player). It is what creatures take aim at, what their blows and missiles meet
-// and what bars the way; the adventurer drawn there is drawPeers'. What hurts it is sent
-// to the other player to be suffered there.
-
-var (
-	proxySlot  int // 0: none
-	proxySq    int
-	hurtPoison int // the poison of the creature's blow being dealt
-)
-
-// isProxy says whether slot i is the other player.
-func isProxy(i int) bool { return proxySlot != 0 && i == proxySlot }
-
-// placeProxy keeps the other player's stand-in where they are, while they are on this
-// level.
-func placeProxy() {
-	var p *peerState
-	for _, ps := range peers {
-		if ps.Level == PlayerLevel && ps.HP > 0 {
-			p = ps
-		}
-	}
-	if p == nil || GrSq < 0 {
-		removeProxy()
+// placeAvatar keeps this player's avatar where the player is.
+func placeAvatar(now time.Time) {
+	if GrSq < 0 || !synced || syncSnap == nil { // made after the first comparison, so that it is sent
 		return
 	}
-	if proxySlot == 0 {
+	if avatarSlot == 0 {
 		if critptr < 0 || !onlineTakeFree(Level.MobFree[:], critptr) {
 			return
 		}
-		proxySlot = int(Level.MobFree[critptr])
+		avatarSlot = int(Level.MobFree[critptr])
 		critptr--
-		o := &Level.Objs[proxySlot]
+		o := &Level.Objs[avatarSlot]
 		*o = Object{}
-		o.ID = ThePlayer.ID
-		proxySq = -1
+		o.SetItem(ITEM_ADVENTURER)
+		o.SetPitch(0x10)
+		avatarSq = -1
 	}
-	o := &Level.Objs[proxySlot]
-	x, y := int(p.X>>8)&MAP_MASK, int(p.Y>>8)&MAP_MASK
-	if sq := x + y<<6; sq != proxySq {
-		if proxySq >= 0 {
-			ObjRem(&Level.Tiles[proxySq].Objects, o)
+	o := &Level.Objs[avatarSlot]
+	if GrSq != avatarSq {
+		dprintf("mp avatar %d: %d -> %d (player %d,%d)\n", avatarSlot, avatarSq, GrSq, PN.X>>8, PN.Y>>8)
+		if avatarSq >= 0 {
+			ObjRem(&Level.Tiles[avatarSq].Objects, o)
 		}
-		proxySq = sq
-		ObjAdd(&Level.Tiles[sq].Objects, o)
+		avatarSq = GrSq
+		ObjAdd(&Level.Tiles[avatarSq].Objects, o)
 	}
-	o.SetHomeX(x)
-	o.SetHomeY(y)
-	o.SetFineX(int(p.X>>5) & 7)
-	o.SetFineY(int(p.Y>>5) & 7)
-	o.SetZ(int(p.Z >> 3))
-	h := uint16(p.Heading)
+	o.SetHomeX(ThePlayer.HomeX())
+	o.SetHomeY(ThePlayer.HomeY())
+	o.SetFineX(ThePlayer.FineX())
+	o.SetFineY(ThePlayer.FineY())
+	o.SetZ(ThePlayer.Z())
+	h := uint16(PlayerFacing)
 	o.SetHeading(int(h >> 13))
 	o.SetFineHead(int(h>>8) & 0x1F)
 	o.Heading = byte(h >> 8)
-	o.HP = p.HP
+	o.HP = ThePlayer.HP
+	switch {
+	case PN.X == lastPos.X && PN.Y == lastPos.Y:
+		o.SetSeq(SEQ_STAND)
+		o.SetFrame(0)
+	case o.Seq() != SEQ_WALK:
+		o.SetSeq(SEQ_WALK)
+		o.SetFrame(0)
+		avatarAt = now
+	case now.Sub(avatarAt) >= avatarStep:
+		o.SetFrame((o.Frame() + 1) % 4)
+		avatarAt = now
+	}
 }
 
-// removeProxy takes the stand-in out of the level, as before the level is saved.
-func removeProxy() {
-	if proxySlot == 0 {
+// avatarObj is this player's avatar, or nil.
+func avatarObj() *Object {
+	if avatarSlot == 0 {
+		return nil
+	}
+	return &Level.Objs[avatarSlot]
+}
+
+// removeAvatar takes this player's avatar off the level, as the player leaves it.
+func removeAvatar() {
+	if avatarSlot == 0 {
 		return
 	}
-	unlinkProxy()
-	critptr++
-	Level.MobFree[critptr] = uint16(proxySlot)
-	proxySlot = 0
+	if avatarSq >= 0 {
+		ObjRem(&Level.Tiles[avatarSq].Objects, &Level.Objs[avatarSlot])
+	}
+	ObjFree(&Level.Objs[avatarSlot])
+	avatarSlot = 0
 }
 
-// unlinkProxy takes the stand-in out of its tile; linkProxy puts it back.
-func unlinkProxy() {
-	if proxySlot != 0 && proxySq >= 0 {
-		ObjRem(&Level.Tiles[proxySq].Objects, &Level.Objs[proxySlot])
+// forgetAvatar: the level the avatar was on is being replaced.
+func forgetAvatar() { avatarSlot = 0 }
+
+// isPeerAvatar says whether slot i is another player's avatar on this level.
+func isPeerAvatar(i int) bool {
+	if i <= 1 || i == avatarSlot {
+		return false
+	}
+	for _, p := range peers {
+		if p.gone == i {
+			return true
+		}
+	}
+	return false
+}
+
+// dropAvatar takes away the avatar in slot i that a player left behind on this level
+// (they took it away in their own world; the slot stays theirs to take again).
+func dropAvatar(i int) {
+	if i <= 1 || i >= NUM_MOBILE || i == avatarSlot || i%mp.MaxPlayers == onlineMe() {
+		return
+	}
+	o := &Level.Objs[i]
+	if o.Item() != ITEM_ADVENTURER {
+		return
+	}
+	if head := &Level.Tiles[o.HomeX()+o.HomeY()<<6].Objects; linkedIn(head, i) {
+		ObjRem(head, o)
+	}
+	*o = Object{}
+	editchng(2)
+}
+
+func onlineMe() int {
+	if online == nil {
+		return -1
+	}
+	return online.Me
+}
+
+// dropPeerAvatars takes the other players' avatars out of this level, as it is saved:
+// they are where their players are, not in a level kept for later.
+func dropPeerAvatars() {
+	for _, p := range peers {
+		dropAvatar(p.gone)
+		p.gone = 0
 	}
 }
 
-func linkProxy() {
-	if proxySlot != 0 && proxySq >= 0 {
-		ObjAdd(&Level.Tiles[proxySq].Objects, &Level.Objs[proxySlot])
+// peerOnLevel says whether another player is on level.
+func peerOnLevel(level int) bool {
+	for _, p := range peers {
+		if p.Level == level {
+			return true
+		}
 	}
+	return false
 }
 
-// forgetProxy drops the stand-in when the level it was in is replaced.
-func forgetProxy() { proxySlot = 0 }
+// peerAvatar is another player's avatar on this level that is alive, or nil.
+func peerAvatar() *Object {
+	for _, p := range peers {
+		if p.gone != 0 {
+			if o := &Level.Objs[p.gone]; o.Item() == ITEM_ADVENTURER && o.HP > 0 {
+				return o
+			}
+		}
+	}
+	return nil
+}
 
 // targetPlayer is the player a creature goes for: the nearer, or for one that fights
 // from afar the weaker. meptr is the creature.
 func targetPlayer() *Object {
-	if proxySlot == 0 {
+	other := peerAvatar()
+	if other == nil {
 		return ThePlayer
 	}
-	other := &Level.Objs[proxySlot]
 	if ThePlayer.HP == 0 {
 		return other
 	}
-	if other.HP == 0 {
-		return ThePlayer
-	}
 	cr := &Creatures[meptr.InMajor()]
-	if cr.Caster() > 0 || cr.ArmsItem(0)>>4 == CLASS_MISSILE {
-		if other.HP != ThePlayer.HP {
-			if other.HP < ThePlayer.HP {
-				return other
-			}
-			return ThePlayer
+	if (cr.Caster() > 0 || cr.ArmsItem(0)>>4 == CLASS_MISSILE) && other.HP != ThePlayer.HP {
+		if other.HP < ThePlayer.HP {
+			return other
 		}
+		return ThePlayer
 	}
 	if distTo(meptr, other) < distTo(meptr, ThePlayer) {
 		return other
@@ -195,13 +245,30 @@ func distTo(a, b *Object) int {
 	return dx*dx + dy*dy
 }
 
-// hurtProxy sends the other player the damage a creature's blow or missile did to them.
-func hurtProxy(damage, typ int) {
+// collideSkip says whether the collision check of the object moving (index, 0 for one
+// being placed) passes object i: this player's avatar always (the player object is the
+// player here), and for this player and what it drops another's while this player
+// stands inside it already, so that two players who start in the same place can walk
+// apart.
+func collideSkip(index, i int) bool {
+	if i == avatarSlot && avatarSlot != 0 {
+		return true
+	}
+	if index > 1 || !isPeerAvatar(i) {
+		return false
+	}
+	r := 2 * ComObjData[ITEM_ADVENTURER].Radius()
+	return distTo(ThePlayer, &Level.Objs[i]) < r*r
+}
+
+// hurtPeer sends the other player the damage a creature's blow or missile did to their
+// avatar.
+func hurtPeer(damage, typ int) {
 	dprintf("mp hurt the other: %d (type %d) by %d\n", damage, typ, fromwho)
 	online.Send(mp.Msg{Op: "hurt", Level: PlayerLevel, Slots: []int{damage, typ, hurtPoison}})
 }
 
-// takeHurt suffers what a creature did to this player in the other player's world.
+// takeHurt suffers what a creature did to this player's avatar in the other's world.
 func takeHurt(m mp.Msg) {
 	if len(m.Slots) < 3 || m.Level != PlayerLevel || ThePlayer.HP == 0 {
 		return
@@ -220,58 +287,19 @@ func takeHurt(m mp.Msg) {
 	lastcombattime = GameTime()
 }
 
-// peerOnLevel says whether another player is on level.
-func peerOnLevel(level int) bool {
-	for _, p := range peers {
-		if p.Level == level {
+// peerTalkTo has the other player talked to by the creature in slot i, which came up to
+// their avatar.
+func peerTalkTo(i int) {
+	online.Send(mp.Msg{Op: "talkto", Level: PlayerLevel, Slots: []int{i}})
+}
+
+// linkedIn says whether object i is in the list at head.
+func linkedIn(head *Link, i int) bool {
+	for j, n := head.Index(), 0; j > 0 && j < NUM_OBJECTS && n < 0x400; n++ {
+		if j == i {
 			return true
 		}
+		j = Level.Objs[j].Next()
 	}
 	return false
-}
-
-// drawPeers draws the other players standing on the tile at tmptr, after its objects.
-func drawPeers() {
-	if online == nil || PickUp != 0 {
-		return
-	}
-	for _, p := range peers {
-		if p.Level != PlayerLevel || int(p.X>>8)+int(p.Y>>8)*MAP_SIZE != tmptr {
-			continue
-		}
-		if iabs(int(p.X-PN.X)) < peerNear && iabs(int(p.Y-PN.Y)) < peerNear {
-			continue // standing in each other: the eye would be inside the picture
-		}
-		fx, fy := int(p.X&0xFF), int(p.Y&0xFF)
-		var x, y int
-		switch quad { // the tile's place turned into the first quadrant, as doObj turns mobiles'
-		case 0:
-			x, y = fx, fy
-		case 1:
-			x, y = 0xFF-fy, fx
-		case 2:
-			x, y = 0xFF-fx, 0xFF-fy
-		case 3:
-			x, y = fy, 0xFF-fx
-		}
-		objxloc = (loopx-16)<<8 + x
-		objzloc = loopy<<8 + y
-		objyloc = int(p.Z)
-		// as doObj picks a critter's frame: the sequence's picture for the direction it
-		// faces from the eye, and the step of the walk
-		dir := int(dirtab[(int(uint16(p.Heading))>>11+0x20-int((uint16(cPlayer.heading)+headmod[quad])>>11))%0x20])
-		frame, step := SEQ_STAND+dir, 0
-		if p.Moving {
-			frame, step = (SEQ_WALK-0x20)<<3+dir+0x20, p.step
-		}
-		if pic, ok := critterPic(peerItem&0x3F, int(sqmod)*lighton, frame, step); ok {
-			rend.CritterSprite(objPoint(), pic)
-		}
-	}
-}
-
-// proxyTalkTo has the other player talked to by the creature in slot i, which came up to
-// them.
-func proxyTalkTo(i int) {
-	online.Send(mp.Msg{Op: "talkto", Level: PlayerLevel, Slots: []int{i}})
 }

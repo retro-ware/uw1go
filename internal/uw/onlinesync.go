@@ -33,7 +33,7 @@ import (
 //   - A player arriving on a level where the other is asks for it and loads it as it is
 //     now; one leaving a level sends it as saved, for the other's LEV.ARK.
 //
-//   - Creatures see the other player by their stand-in (onlinepeer.go).
+//   - Each player is an object of the level too, their avatar (onlinepeer.go).
 
 const (
 	syncLen   = 0x7300 // the level block's map and object records
@@ -101,7 +101,7 @@ func onlineTick() {
 		syncSnap = cur
 	}
 	if synced {
-		questTick(now)
+		questTick()
 	}
 	for _, m := range online.Events() {
 		onlineEvent(m)
@@ -199,7 +199,6 @@ func recordRange(i int) (int, int) {
 func ownObjects() *[NUM_OBJECTS]bool {
 	var own [NUM_OBJECTS]bool
 	own[1] = true
-	own[proxySlot] = true
 	var walk func(l Link)
 	walk = func(l Link) {
 		for i := l.Index(); i > 0 && i < NUM_OBJECTS && !own[i]; {
@@ -221,15 +220,13 @@ func ownObjects() *[NUM_OBJECTS]bool {
 	return &own
 }
 
-// withoutPlayer runs f with the player object (and the other player's stand-in) out of its tile's list, as the level is
+// withoutPlayer runs f with the player object out of its tile's list, as the level is
 // saved. It goes back at the head of the list.
 func withoutPlayer(f func()) {
 	if GrSq >= 0 {
 		ObjRem(&Level.Tiles[GrSq].Objects, ThePlayer)
 		defer ObjAdd(&Level.Tiles[GrSq].Objects, ThePlayer)
 	}
-	unlinkProxy()
-	defer linkProxy()
 	f()
 }
 
@@ -251,8 +248,27 @@ func syncBlock() []byte {
 	return b
 }
 
-// diffBytes encodes where b differs from a: runs of (offset from the last run's end,
-// length, bytes), runs closer than 8 bytes merged.
+// mobileFields are where the fields of a mobile object's record start (object.go's
+// encode), and its length: a field is never split between two players' values.
+var mobileFields = [...]int{0, 2, 4, 6, 8, 9, 10, 11, 13, 15, 17, 18, 19, 20, 21, 22, 24, 25, 26, MOBILE_SIZE}
+
+// syncField is the field of the level block that byte at is part of: a tile's two words,
+// an object record's fields.
+func syncField(at int) (int, int) {
+	if at >= 0x4000 && at < 0x5B00 {
+		rel := (at - 0x4000) % MOBILE_SIZE
+		base := at - rel
+		for k := 1; k < len(mobileFields); k++ {
+			if rel < mobileFields[k] {
+				return base + mobileFields[k-1], base + mobileFields[k]
+			}
+		}
+	}
+	return at &^ 1, at&^1 + 2
+}
+
+// diffBytes encodes where b differs from a, by whole fields: runs of (offset from the
+// last run's end, length, bytes).
 func diffBytes(a, b []byte) []byte {
 	var out []byte
 	last := 0
@@ -261,15 +277,16 @@ func diffBytes(a, b []byte) []byte {
 			i++
 			continue
 		}
-		j, same := i, 0
-		for ; j < len(b) && same < 8; j++ {
-			if a[j] == b[j] {
-				same++
+		i, _ = syncField(i)
+		j := i
+		for j < len(b) {
+			s, e := syncField(j)
+			if !bytes.Equal(a[s:e], b[s:e]) {
+				j = e
 			} else {
-				same = 0
+				break
 			}
 		}
-		j -= same
 		out = binary.AppendUvarint(out, uint64(i-last))
 		out = binary.AppendUvarint(out, uint64(j-i))
 		out = append(out, b[i:j]...)
@@ -315,7 +332,7 @@ func applyDiff(d []byte, owner bool, ack int) {
 		b := Level.encode()
 		// both as they were: keep must decide the same for both patches
 		live, snap := bytes.Clone(b), bytes.Clone(syncSnap)
-		keep := func(at int) bool {
+		keepByte := func(at int) bool {
 			if owner && (changedIn[at] > ack || live[at] != snap[at]) {
 				dprintf("mp keep %#x: changed in %d, ack %d, live %#x snap %#x\n", at, changedIn[at], ack, live[at], snap[at])
 				return true // the owner's word, on its way or still to go
@@ -330,6 +347,15 @@ func applyDiff(d []byte, owner bool, ack int) {
 				i = NUM_MOBILE + (at-0x5B00)/STATIC_SIZE
 			}
 			return i < NUM_OBJECTS && own[i]
+		}
+		keep := func(at int) bool { // a field goes whole, or not at all
+			s, e := syncField(at)
+			for k := s; k < e; k++ {
+				if keepByte(k) {
+					return true
+				}
+			}
+			return false
 		}
 		if patchBytes(b[:syncLen], d, keep) {
 			patchBytes(syncSnap, d, keep)
@@ -353,7 +379,26 @@ func liveLevelBlock() (data, anim []byte) {
 	Level.NMobFree = uint16(critptr)
 	Level.NStatFree = uint16(objptr)
 	Level.Magic = LEVEL_MAGIC
-	withoutPlayer(func() { data = Level.encode() })
+	withoutPlayer(func() {
+		// the other player's avatar neither: they have it, and make it anew
+		var gone []int
+		for _, p := range peers {
+			if isPeerAvatar(p.gone) {
+				o := &Level.Objs[p.gone]
+				if head := &Level.Tiles[o.HomeX()+o.HomeY()<<6].Objects; linkedIn(head, p.gone) {
+					ObjRem(head, o)
+					gone = append(gone, p.gone)
+				}
+			}
+		}
+		data = Level.encode()
+		for _, i := range gone {
+			o := &Level.Objs[i]
+			ObjAdd(&Level.Tiles[o.HomeX()+o.HomeY()<<6].Objects, o)
+			off, n := recordRange(i)
+			clear(data[off : off+n])
+		}
+	})
 	for i, own := range ownObjects() {
 		if own {
 			off, n := recordRange(i)
@@ -490,6 +535,8 @@ func debugWorldDump(now time.Time) {
 			o := &Level.Objs[i]
 			if i != 1 {
 				line += fmt.Sprintf(" %d:%#x@%d,%d,%d q%d", i, o.Item(), o.FineX(), o.FineY(), o.Z(), o.Quality())
+			} else if os.Getenv("UW1GO_MPDUMP1") != "" {
+				line += " P"
 			}
 			i = o.Next()
 		}

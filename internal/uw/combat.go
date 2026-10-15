@@ -261,9 +261,9 @@ func doDamage(typ int) {
 		ddone >>= 1
 	}
 	var result bool
-	if isProxy(hitobj) { // the other player: suffered there, and only from creatures
+	if isPeerAvatar(hitobj) { // another player: suffered there, and only from creatures
 		if fromwho > 1 && fromwho < NUM_MOBILE {
-			hurtProxy(ddone, typ)
+			hurtPeer(ddone, typ)
 		}
 	} else {
 		result = damageItem(def, ObjIntTMem(fromwho), targx, targy, ddone, typ)
@@ -357,7 +357,7 @@ func doAttack() bool {
 	if !resolveAttack() {
 		return doMiss(0)
 	}
-	if fromwho != 1 && hitobj != 1 && !isProxy(hitobj) && IsMobElem(ObjIntTMem(hitobj)) &&
+	if fromwho != 1 && hitobj != 1 && !isPeerAvatar(hitobj) && IsMobElem(ObjIntTMem(hitobj)) &&
 		ObjIntTMem(hitobj).Ally()^ObjIntTMem(fromwho).Ally() == 0 {
 		return false
 	}

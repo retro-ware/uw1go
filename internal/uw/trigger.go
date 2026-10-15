@@ -95,6 +95,7 @@ func UseTrap(trap *Object, x, y int) int {
 		result = changeTerrain(x, y, trap.Owner(), trap.Quality()>>1, trap.Z()>>3, i,
 			trap.FineX(), trap.FineY(), 0)
 	case TRAP_SET_VARIABLE:
+		questChanged()
 		i := trap.Z()
 		d := (trap.Quality()<<5|trap.Owner())<<3 | trap.FineY()
 		c := trap.HeadingBits()

@@ -213,6 +213,7 @@ func setMaze(on bool) {
 			swapTmap(tex)
 		}
 	}
+	questChanged()
 	player.SetMaze(b2i(on))
 }
 

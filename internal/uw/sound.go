@@ -608,6 +608,7 @@ func playCupTune(played []byte) bool {
 	}
 	if placeNew(nil, 0xAE) != nil {
 		gameSprint(0x88)
+		questChanged()
 		player.SetCup(1)
 		return true
 	}

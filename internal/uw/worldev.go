@@ -229,6 +229,7 @@ func workBullfrogTiles(mode, x, y int) {
 		gameSprint(0xBF)
 		return
 	}
+	questChanged()
 	gv := &player.GameVars
 	switch mode {
 	case 0, 1:
@@ -316,6 +317,7 @@ func explodingBook(trap *Object, x, y int) {
 	head := &MapGetAddr(ThePlayer.HomeX(), ThePlayer.HomeY()).Objects
 	if book := ObjInList(&head, true, 4, 1, 4); book != nil {
 		scrollPrint("The book explodes in your face!\n")
+		questChanged()
 		player.Quests |= 1 << QUEST_BRONUS_BOOK
 		backfire(ThePlayer, 3)
 		InvRemoveOneObject(book)
@@ -377,6 +379,7 @@ func deathCheck(obj *Object, mode bool) bool {
 	switch obj.Whoami {
 	case 0x1B:
 		if mode {
+			questChanged()
 			player.SetTalismanOK(0)
 		}
 	case 0xE7:
@@ -404,14 +407,17 @@ func deathCheck(obj *Object, mode bool) bool {
 		}
 	case 0x6E:
 		if mode {
+			questChanged()
 			player.Quests |= 1 << QUEST_GAZER
 		}
 	case 0x8E:
 		if mode {
+			questChanged()
 			player.Quests |= 1 << QUEST_RODRICK
 		}
 	case 0x18:
 		if mode {
+			questChanged()
 			player.Quests |= 1 << QUEST_LIZARDMEN
 		}
 	}

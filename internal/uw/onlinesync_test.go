@@ -32,3 +32,19 @@ func TestDiffPatch(t *testing.T) {
 		t.Fatal("a diff of equal blocks")
 	}
 }
+
+// TestSyncField: the fields cover the block, each byte in exactly one.
+func TestSyncField(t *testing.T) {
+	for at := 0; at < syncLen; {
+		s, e := syncField(at)
+		if s != at || e <= s || e-s > 2 {
+			t.Fatalf("byte %#x: field %#x..%#x", at, s, e)
+		}
+		for k := s; k < e; k++ {
+			if s2, e2 := syncField(k); s2 != s || e2 != e {
+				t.Fatalf("byte %#x: field %#x..%#x, not %#x..%#x", k, s2, e2, s, e)
+			}
+		}
+		at = e
+	}
+}

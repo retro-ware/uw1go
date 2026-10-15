@@ -240,6 +240,7 @@ func useBonesOn(obj *Object, how, _ int) {
 	if obj.Item() == ITEM_GRAVESTONE {
 		if ObjectActing.Owner() == 0x3E {
 			if obj.IsQuant() != 0 && obj.LinkF()&LINK_SPECIAL != 0 && obj.LinkF()&0x1FF == 0x21 {
+				questChanged()
 				player.SetTalismanOK(1)
 				player.SetGaramon(1)
 				obj.SetLinkF(0x222)
@@ -329,6 +330,7 @@ func tybalsOrbOn(obj *Object, how, _ int) {
 		putEffect(obj, 4, 5, 0, 0, MapObjX, MapObjY)
 		ObjPunt(&MapGetAddr(MapObjX, MapObjY).Objects, obj, true)
 		MapObjX = -1
+		questChanged()
 		player.SetOrb(1)
 		player.MaxMana = player.SavedMana
 		player.PlayMana = player.SavedMana

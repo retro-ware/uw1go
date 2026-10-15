@@ -190,6 +190,7 @@ func mantraAdvance() {
 			case 1:
 				if player.Key() == 0 && placeNew(nil, ITEM_KEY_OF_TRUTH) != nil {
 					gameSprint(0x1E)
+					questChanged()
 					player.SetKey(1)
 				}
 				waitTicks(0x20)
@@ -519,6 +520,7 @@ func checkVictory() {
 			ObjFree(gate)
 		}
 		doTeleport(ThePlayer, 0x1B, 0x17, 9)
+		questChanged()
 		player.Talismans = 0xFF
 		gameSprint(0x118)
 		NewPlyFade &= 0xFE

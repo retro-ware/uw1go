@@ -124,8 +124,11 @@ go run ./cmd/uw1 -relay ws://127.0.0.1:7781 -data /path/to/UW
 `deploy/relay/install.sh` installs the relay on the server as a systemd
 socket-activated service that exits when idle.
 
-Creatures go for the nearer player (those that fight from afar, the weaker),
-and what they do to the other player is suffered there. A conversation opens
-for both: the one who started it runs it, the other sees it and may answer
-too. Quest flags, game variables and conversations' variables are shared, and
+Each player is an adventurer in the other's world, an object of the level
+like any other: drawn, walked into, fought by creatures (they go for the
+nearer player, those that fight from afar for the weaker), and what hurts it
+is suffered by its player. A conversation opens for both: the one who started
+it runs it, the other sees it and may answer too. Quest flags, game variables
+and conversations' variables are shared when they change (flags merge bit by
+bit; where both change the same thing at once, the host's word stands), and
 both keep the same list of running animations.

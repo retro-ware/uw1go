@@ -360,14 +360,12 @@ func grdbElem(automap *byte) {
 	if drawingBehind { // the eye's row's objects come with the forward pass; no automap
 		if pGloc >= glocAt(1, 0) {
 			doObjsort(&t.Objects)
-			drawPeers()
 		} else {
 			clearObjsort()
 		}
 		return
 	}
 	doObjsort(&t.Objects)
-	drawPeers()
 	if curautocode != 0 {
 		if sqmod < 8 {
 			code |= curautocode << 6

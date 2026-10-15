@@ -577,7 +577,7 @@ func critTalk() {
 				rel = (mytarget.HeadingBits() + 8 - int(head)) & 7
 			}
 			if rel >= 3 && rel <= 5 && mytarget != ThePlayer {
-				proxyTalkTo(int(myid))
+				peerTalkTo(int(myid))
 				critterSetGoal(GOAL_STAND, 0)
 			} else if rel >= 3 && rel <= 5 {
 				pmouseHandled = 0

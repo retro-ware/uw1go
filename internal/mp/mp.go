@@ -56,6 +56,7 @@ type Pos struct {
 	Heading int16 `json:"h"`
 	Moving  bool  `json:"m,omitempty"`
 	HP      byte  `json:"hp,omitempty"`
+	Avatar  int   `json:"a,omitempty"` // the player's avatar's object slot on the level`
 }
 
 // Client is one connection to the relay.

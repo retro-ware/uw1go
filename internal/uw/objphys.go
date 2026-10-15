@@ -317,6 +317,7 @@ func mobToStatic(obj *Object) *Object {
 		if player.TalismanOK() != 0 {
 			fate = 8
 			keep = false
+			questChanged()
 			player.Talismans--
 			if player.Talismans == 0 {
 				gameSprint(0x116)
