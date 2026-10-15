@@ -119,6 +119,13 @@ go run ./cmd/uw1relay -addr 127.0.0.1:7781          # a relay (ruzzoli.de runs o
 go run ./cmd/uw1 -relay ws://127.0.0.1:7781 -data /path/to/UW
 ```
 
+`-host` hosts a game right away and `-join CODE` joins one (CODE may be the
+invite link). Hosting shows an invite link, `https://ruzzoli.de/goplay/?join=CODE`
+(in the browser it is also copied to the clipboard): opened in a browser
+where Ultima Underworld is installed, goplay starts the game and joins.
+Desktop and browser players play together on the same relay; the joiner's
+build must match the host's (`uw.Protocol`), else they play alone.
+
 `-relay` defaults to `UW1GO_RELAY`, else `wss://ruzzoli.de/goplay/uw1relay`
 (in the browser, the page's own host); `-relay off` skips the menu.
 `deploy/relay/install.sh` installs the relay on the server as a systemd

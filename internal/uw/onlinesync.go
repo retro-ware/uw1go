@@ -56,6 +56,10 @@ var (
 	dumpN     int
 )
 
+// Protocol names what the online messages mean; players with different ones cannot play
+// together. Change it whenever they change.
+const Protocol = "uw1go-online-5"
+
 // onlineTick runs once a main loop pass while online.
 func onlineTick() {
 	if online == nil || !inGame {
@@ -66,7 +70,7 @@ func onlineTick() {
 		helloSent = true
 		synced = online.Me == 0
 		if !synced {
-			online.Send(mp.Msg{Op: "hello"})
+			online.Send(mp.Msg{Op: "hello", Text: Protocol})
 			wantAt = now
 		}
 	}
@@ -105,7 +109,9 @@ func onlineTick() {
 		givesTick(now)
 	}
 	for _, m := range online.Events() {
-		onlineEvent(m)
+		if onlineEvent(m); online == nil {
+			return
+		}
 	}
 	if !convWatching && !convoWorkspace { // conversations open after the events taken with them
 		if i := convTalkNpc; i != 0 && scrmode == 1 {
@@ -121,6 +127,10 @@ func onlineEvent(m mp.Msg) {
 	switch m.Op {
 	case "hello": // a player joined: they take the world
 		if online.Me != 0 {
+			return
+		}
+		if m.Text != Protocol {
+			online.Send(mp.Msg{Op: "mismatch", Text: Protocol})
 			return
 		}
 		online.Send(mp.Msg{Op: "questall", Data: questState()})
@@ -190,6 +200,12 @@ func onlineEvent(m mp.Msg) {
 		convEvent(m)
 	case "left":
 		editchng(2)
+	case "mismatch": // the host plays another version: playing on would split the world
+		if online.Me != 0 {
+			scrollPrint("The host's game is another version (" + m.Text + ", this is " + Protocol + "). Playing alone.\n")
+			online.Close()
+			online = nil
+		}
 	}
 }
 

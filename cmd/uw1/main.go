@@ -21,8 +21,15 @@ func main() {
 	importFrom := flag.String("import", "", "goplay: find the game under this folder, copy it to -data, and exit")
 	scale := flag.Int("scale", 3, "window scale")
 	relay := flag.String("relay", defaultRelay(), "online play: the relay's address (ws:// or wss://); \"off\" for none")
+	hostGame := flag.Bool("host", false, "online play: host a game right away")
+	join := flag.String("join", "", "online play: join the game with this code (or invite link) right away")
 	flag.Parse()
 	uw.RelayURL = *relay
+	uw.AutoHost, uw.AutoJoin = *hostGame, *join
+	if uw.AutoJoin == "" {
+		uw.AutoJoin = pageJoin()
+	}
+	uw.Invite, uw.Share = invite, share
 	if *importFrom != "" {
 		if err := importGame(*importFrom, *data); err != nil {
 			fmt.Fprintln(os.Stderr, err)
@@ -51,6 +58,10 @@ func main() {
 		os.Exit(1)
 	}
 }
+
+// invite is the link that joins the hosted game code: goplay's page, which starts the game
+// joining it (a desktop player gives the link or the code to -join).
+func invite(code string) string { return goplayURL() + "?join=" + code }
 
 // defaultRelay is UW1GO_RELAY, or the relay at ruzzoli.de (beside goplay).
 func defaultRelay() string {
