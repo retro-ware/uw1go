@@ -103,3 +103,18 @@ presses and clicks (and ignores the real keyboard and mouse);
 `UW1GO_LIGHT` and `UW1GO_TALK=1` help get to a place or a conversation
 quickly. `UW1GO_WIDTH=N` fixes the game screen's width (320 to 864) as a
 wide window would ask for it.
+
+## Online play (experimental)
+
+With a relay, the game asks before the main menu whether to play alone, host
+an online game or join one. Everyone plays their own world (their own
+character and save); only where each player is goes over the network, and
+the others show as fighters where they stand on the same level.
+
+```sh
+go run ./cmd/uw1 -serve-relay :7777                       # the relay, once, somewhere both can reach
+go run ./cmd/uw1 -relay ws://that-host:7777 -data /path/to/UW  # each player
+```
+
+`-relay` defaults to `UW1GO_RELAY`, or `GOPLAY_RELAY` under goplay. A page
+served over https needs the relay behind `wss://`.

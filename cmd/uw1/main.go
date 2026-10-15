@@ -20,7 +20,21 @@ func main() {
 	saves := flag.String("saves", "", "where saved games go (default: the user config directory)")
 	importFrom := flag.String("import", "", "goplay: find the game under this folder, copy it to -data, and exit")
 	scale := flag.Int("scale", 3, "window scale")
+	defRelay := os.Getenv("UW1GO_RELAY")
+	if defRelay == "" {
+		defRelay = os.Getenv("GOPLAY_RELAY")
+	}
+	relay := flag.String("relay", defRelay, "online play: the relay's address (ws://host:port); empty, no online menu")
+	serve := flag.String("serve-relay", "", "run an online play relay on this address (such as :7777) instead of the game")
 	flag.Parse()
+	if *serve != "" {
+		if err := serveRelay(*serve); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
+	}
+	uw.RelayURL = *relay
 	if *importFrom != "" {
 		if err := importGame(*importFrom, *data); err != nil {
 			fmt.Fprintln(os.Stderr, err)

@@ -88,6 +88,9 @@ func realStart(intro bool) {
 	// no introduction before the menu (UltimaHacks' skip): the menu still offers it
 	forceMouseCursor(ICON_CURSORS)
 	mouseShow()
+	if online == nil {
+		onlineMenu()
+	}
 	done := false
 	choice := 0
 	for !done {

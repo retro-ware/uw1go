@@ -19,6 +19,7 @@ func mainloop() {
 			doChanges()
 		}
 		checkWidth()
+		onlineTick()
 		inputDispatch(inplist)
 	}
 }
