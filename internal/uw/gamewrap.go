@@ -292,6 +292,9 @@ func ChangeLevel(from, to int) bool {
 	doLevelHacks(from, 1)
 	ok := SaveLevel(from)
 	if ok {
+		onlineLeftLevel(from)
+	}
+	if ok {
 		if ok = GetLevel(to) != 0; ok {
 			doLevelHacks(to, 0)
 		} else {

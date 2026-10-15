@@ -1213,6 +1213,9 @@ func moveMobile(delta int) {
 	meptr = nil
 	for p := 0; p < nActive; p++ {
 		meptr = ObjIntTMem(int(Level.Active[p]))
+		if !onlineMoves(meptr, int(Level.Active[p])) {
+			continue
+		}
 		for timetodo(meptr.Bin()) {
 			var ok bool
 			if meptr.Major() == MAJOR_CREATURE {

@@ -106,15 +106,23 @@ wide window would ask for it.
 
 ## Online play (experimental)
 
-With a relay, the game asks before the main menu whether to play alone, host
-an online game or join one. Everyone plays their own world (their own
-character and save); only where each player is goes over the network, and
-the others show as fighters where they stand on the same level.
+Before the main menu the game asks whether to play alone, host an online
+game or join one. The joiner gets the host's world (all nine levels) and
+both then share it: every 50 ms each side sends what changed in its level
+(tiles and object records), the player who is longest on a level wins a
+conflict over it, and new objects come from separate halves of the free
+list so they never collide. The other player is drawn as the adventurer,
+walking in eight directions. Two players per game.
 
 ```sh
-go run ./cmd/uw1 -serve-relay :7777                       # the relay, once, somewhere both can reach
-go run ./cmd/uw1 -relay ws://that-host:7777 -data /path/to/UW  # each player
+go run ./cmd/uw1relay -addr 127.0.0.1:7781          # a relay (ruzzoli.de runs one on demand)
+go run ./cmd/uw1 -relay ws://127.0.0.1:7781 -data /path/to/UW
 ```
 
-`-relay` defaults to `UW1GO_RELAY`, or `GOPLAY_RELAY` under goplay. A page
-served over https needs the relay behind `wss://`.
+`-relay` defaults to `UW1GO_RELAY`, else `wss://ruzzoli.de/goplay/uw1relay`
+(in the browser, the page's own host); `-relay off` skips the menu.
+`deploy/relay/install.sh` installs the relay on the server as a systemd
+socket-activated service that exits when idle.
+
+Not shared yet: creatures neither see nor fight the other player, and
+conversations and quest flags stay each player's own.

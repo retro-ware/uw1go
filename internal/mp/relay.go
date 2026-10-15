@@ -5,32 +5,67 @@ package mp
 import (
 	"context"
 	"log"
+	"net"
 	"net/http"
+	"os"
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/coder/websocket"
 	"github.com/coder/websocket/wsjson"
 )
 
 type peer struct {
-	id   int
-	conn *websocket.Conn
-	out  chan Msg
+	num int
+	out chan Msg
 }
 
-// Relay keeps the rooms.
+// Relay keeps the rooms: each a map of player number to peer.
 type Relay struct {
-	mu     sync.Mutex
-	nextID int
-	rooms  map[string]map[*peer]bool
+	mu    sync.Mutex
+	rooms map[string]map[int]*peer
+	conns int
+	idle  time.Time // when the last connection went
 }
 
-// Serve runs a relay on addr (such as ":7777") until it fails.
-func Serve(addr string) error {
-	r := &Relay{rooms: map[string]map[*peer]bool{}}
-	log.Printf("uw1 relay on %s", addr)
-	return http.ListenAndServe(addr, r)
+func NewRelay() *Relay { return &Relay{rooms: map[string]map[int]*peer{}, idle: time.Now()} }
+
+// Serve runs a relay on addr (such as "127.0.0.1:7781"), or on the socket systemd passes
+// (LISTEN_FDS). With idle above zero it returns once no one has been connected for that
+// long; systemd starts it again on the next connection.
+func Serve(addr string, idle time.Duration) error {
+	var l net.Listener
+	var err error
+	if os.Getenv("LISTEN_FDS") == "1" {
+		l, err = net.FileListener(os.NewFile(3, "systemd"))
+	} else {
+		l, err = net.Listen("tcp", addr)
+	}
+	if err != nil {
+		return err
+	}
+	r := NewRelay()
+	if idle > 0 {
+		go func() {
+			for range time.Tick(time.Minute) {
+				r.mu.Lock()
+				done := r.conns == 0 && time.Since(r.idle) > idle
+				r.mu.Unlock()
+				if done {
+					log.Print("idle, stopping")
+					l.Close()
+					return
+				}
+			}
+		}()
+	}
+	log.Printf("uw1 relay on %s", l.Addr())
+	if err := http.Serve(l, r); err != nil && idle > 0 {
+		return nil // closed for idleness
+	} else {
+		return err
+	}
 }
 
 func (r *Relay) ServeHTTP(w http.ResponseWriter, req *http.Request) {
@@ -38,10 +73,8 @@ func (r *Relay) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	if err != nil {
 		return
 	}
-	r.mu.Lock()
-	r.nextID++
-	p := &peer{id: r.nextID, conn: c, out: make(chan Msg, 64)}
-	r.mu.Unlock()
+	c.SetReadLimit(readLimit)
+	p := &peer{out: make(chan Msg, 512)}
 	ctx, cancel := context.WithCancel(req.Context())
 	defer cancel()
 	go func() {
@@ -52,15 +85,20 @@ func (r *Relay) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			}
 		}
 	}()
+	r.mu.Lock()
+	r.conns++
+	r.mu.Unlock()
 	room := ""
 	defer func() {
 		r.mu.Lock()
+		r.conns--
+		r.idle = time.Now()
 		if room != "" {
-			delete(r.rooms[room], p)
+			delete(r.rooms[room], p.num)
 			if len(r.rooms[room]) == 0 {
 				delete(r.rooms, room)
 			}
-			r.broadcast(room, p, Msg{Op: "left", From: p.id})
+			r.broadcast(room, p, Msg{Op: "left", From: p.num})
 		}
 		r.mu.Unlock()
 		close(p.out)
@@ -79,27 +117,38 @@ func (r *Relay) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 				for r.rooms[room] != nil {
 					room = RoomName()
 				}
-				r.rooms[room] = map[*peer]bool{p: true}
+				p.num = 0
+				r.rooms[room] = map[int]*peer{0: p}
 			}
-			r.reply(p, Msg{Op: "room", Room: room})
+			r.reply(p, Msg{Op: "room", Room: room, From: p.num})
 		case "list":
 			rooms := []string{}
-			for name := range r.rooms {
-				rooms = append(rooms, name)
+			for name, ps := range r.rooms {
+				if len(ps) < MaxPlayers {
+					rooms = append(rooms, name)
+				}
 			}
 			sort.Strings(rooms)
 			r.reply(p, Msg{Op: "rooms", Rooms: rooms})
 		case "join":
-			if room != "" || r.rooms[m.Room] == nil {
-				r.reply(p, Msg{Op: "error", Err: "no such game"})
-				break
+			ps := r.rooms[m.Room]
+			switch {
+			case room != "" || ps == nil:
+				r.reply(p, Msg{Op: "error", Err: "No such game"})
+			case len(ps) >= MaxPlayers:
+				r.reply(p, Msg{Op: "error", Err: "That game is full"})
+			default:
+				for ps[p.num] != nil {
+					p.num++
+				}
+				room = m.Room
+				ps[p.num] = p
+				r.reply(p, Msg{Op: "joined", Room: room, From: p.num})
 			}
-			room = m.Room
-			r.rooms[room][p] = true
-			r.reply(p, Msg{Op: "joined", Room: room})
-		case "pos":
-			if room != "" && m.Pos != nil {
-				r.broadcast(room, p, Msg{Op: "pos", From: p.id, Pos: m.Pos})
+		default:
+			if room != "" {
+				m.From = p.num
+				r.broadcast(room, p, m)
 			}
 		}
 		r.mu.Unlock()
@@ -115,7 +164,7 @@ func (r *Relay) reply(p *peer, m Msg) {
 }
 
 func (r *Relay) broadcast(room string, from *peer, m Msg) {
-	for q := range r.rooms[room] {
+	for _, q := range r.rooms[room] {
 		if q != from {
 			r.reply(q, m)
 		}

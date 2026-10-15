@@ -128,9 +128,9 @@ func ObjGarbageCollect(rng, count int) {
 // ObjAlloc pops a free mobile or static object.
 func ObjAlloc(mobile bool) *Object {
 	if mobile {
-		if critptr < 0 {
+		if critptr < 0 || !onlineTakeFree(Level.MobFree[:], critptr) {
 			ObjGarbageCollect(3, 5)
-			if critptr < 0 {
+			if critptr < 0 || !onlineTakeFree(Level.MobFree[:], critptr) {
 				return nil
 			}
 		}
@@ -139,9 +139,9 @@ func ObjAlloc(mobile bool) *Object {
 		critptr--
 		return &Level.Objs[i]
 	}
-	if objptr < 0 {
+	if objptr < 0 || !onlineTakeFree(Level.StaticFree[:], objptr) {
 		ObjGarbageCollect(3, 10)
-		if objptr < 0 {
+		if objptr < 0 || !onlineTakeFree(Level.StaticFree[:], objptr) {
 			return nil
 		}
 	}
@@ -153,6 +153,12 @@ func ObjAlloc(mobile bool) *Object {
 // ObjFree pushes an object back on its free stack.
 func ObjFree(obj *Object) {
 	i := memtptr(obj)
+	if onlineFreeElsewhere(i) { // the other player's slot: freed there
+		if i < NUM_MOBILE {
+			freeCritter(i)
+		}
+		return
+	}
 	if i < NUM_MOBILE {
 		critptr++
 		Level.MobFree[critptr] = uint16(i)
@@ -470,6 +476,9 @@ func ObjListOkay(how bool) bool {
 	}
 	if (GameInputMode == 1 || GameInputMode == 0) && CursorObjPtr != nil {
 		bad = countList(CursorObjPtr, counts) || bad
+	}
+	if online != nil { // the other player's things are in neither the lists nor the free stacks
+		return !bad
 	}
 	if nmobile+mobcount != 0xFF {
 		bad = true

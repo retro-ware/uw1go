@@ -1,7 +1,6 @@
-// Package mp is the experimental online multiplayer: a relay that keeps rooms of players
-// and passes each player's messages to the others in the room, and the client the game
-// talks to it with. The relay knows nothing of the game: each player runs their own world
-// and only tells the others where they are.
+// Package mp is the experimental online multiplayer: a relay that keeps rooms of two
+// players and passes each one's messages to the other, and the client the game talks to
+// it with. The relay knows nothing of the game; what the messages mean is the game's.
 package mp
 
 import (
@@ -15,24 +14,39 @@ import (
 	"github.com/coder/websocket/wsjson"
 )
 
-// Msg is every message between a client and the relay. Op says which fields count:
+// MaxPlayers is the players a room takes. The host is player 0.
+const MaxPlayers = 2
+
+// readLimit takes a whole level block in one message.
+const readLimit = 1 << 20
+
+// Msg is every message between a client and the relay. Op says which fields count. To the
+// relay and back:
 //
-//	host  → room (Room)        the client opens a room and is in it
-//	list  → rooms (Rooms)      the open rooms
-//	join  (Room) → joined, or error (Err)
-//	pos   (Pos) relayed to the room with From set
-//	left  (From)               a player of the room has gone
+//	host  → room (Room, From: the player's number)
+//	list  → rooms (Rooms)
+//	join  (Room) → joined (Room, From), or error (Err)
+//	left  (From)  from the relay: a player of the room has gone
+//
+// Any other op is the game's: the relay passes it to the rest of the room with From set
+// to the sender's number.
 type Msg struct {
 	Op    string   `json:"op"`
 	Room  string   `json:"room,omitempty"`
 	Rooms []string `json:"rooms,omitempty"`
-	From  int      `json:"from,omitempty"`
-	Pos   *Pos     `json:"pos,omitempty"`
+	From  int      `json:"from"`
 	Err   string   `json:"err,omitempty"`
+	Pos   *Pos     `json:"pos,omitempty"`
+	Level int      `json:"level,omitempty"`
+	Slots []int    `json:"slots,omitempty"`
+	Seq   int      `json:"seq,omitempty"`
+	Ack   int      `json:"ack,omitempty"`
+	Data  []byte   `json:"data,omitempty"`
+	Anim  []byte   `json:"anim,omitempty"`
 }
 
 // Pos is where a player is: the level, the place in the game's units (x and y in 1/256
-// tiles, z in 1/8 of an object's z unit) and the heading.
+// tiles, z in 1/8 of an object's z unit), the heading, and whether they are walking.
 type Pos struct {
 	Level   int   `json:"l"`
 	X       int16 `json:"x"`
@@ -44,11 +58,14 @@ type Pos struct {
 
 // Client is one connection to the relay.
 type Client struct {
-	c    *websocket.Conn
-	in   chan Msg
-	mu   sync.Mutex
-	pos  map[int]Pos // the other players by id
-	Room string
+	c      *websocket.Conn
+	answer chan Msg
+	out    chan Msg
+	mu     sync.Mutex
+	pos    map[int]Pos // the other players by number
+	events []Msg
+	Room   string
+	Me     int // this player's number in the room
 }
 
 // Dial connects to the relay at url (ws:// or wss://).
@@ -59,51 +76,54 @@ func Dial(url string) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	cl := &Client{c: c, in: make(chan Msg, 8), pos: map[int]Pos{}}
+	c.SetReadLimit(readLimit)
+	cl := &Client{c: c, answer: make(chan Msg, 1), out: make(chan Msg, 256), pos: map[int]Pos{}}
 	go cl.read()
+	go cl.write()
 	return cl, nil
 }
 
 func (cl *Client) read() {
-	defer close(cl.in)
+	defer close(cl.answer)
 	for {
 		var m Msg
 		if err := wsjson.Read(context.Background(), cl.c, &m); err != nil {
 			return
 		}
+		cl.mu.Lock()
 		switch m.Op {
-		case "pos":
-			if m.Pos != nil {
-				cl.mu.Lock()
-				cl.pos[m.From] = *m.Pos
-				cl.mu.Unlock()
-			}
-		case "left":
-			cl.mu.Lock()
-			delete(cl.pos, m.From)
-			cl.mu.Unlock()
-		default:
+		case "room", "rooms", "joined", "error":
 			select {
-			case cl.in <- m:
+			case cl.answer <- m:
 			default:
 			}
+		case "pos":
+			if m.Pos != nil {
+				cl.pos[m.From] = *m.Pos
+			}
+		case "left":
+			delete(cl.pos, m.From)
+			cl.events = append(cl.events, m)
+		default:
+			cl.events = append(cl.events, m)
 		}
+		cl.mu.Unlock()
 	}
 }
 
-func (cl *Client) send(m Msg) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	return wsjson.Write(ctx, cl.c, m)
+func (cl *Client) write() {
+	for m := range cl.out {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		wsjson.Write(ctx, cl.c, m)
+		cancel()
+	}
 }
 
 // ask sends m and waits for the relay's answer.
 func (cl *Client) ask(m Msg) (Msg, error) {
-	if err := cl.send(m); err != nil {
-		return Msg{}, err
-	}
+	cl.out <- m
 	select {
-	case r, ok := <-cl.in:
+	case r, ok := <-cl.answer:
 		if !ok {
 			return Msg{}, errors.New("the relay closed the connection")
 		}
@@ -119,7 +139,7 @@ func (cl *Client) ask(m Msg) (Msg, error) {
 // Host opens a room and returns its name.
 func (cl *Client) Host() (string, error) {
 	r, err := cl.ask(Msg{Op: "host"})
-	cl.Room = r.Room
+	cl.Room, cl.Me = r.Room, r.From
 	return r.Room, err
 }
 
@@ -131,25 +151,38 @@ func (cl *Client) List() ([]string, error) {
 
 // Join enters a room.
 func (cl *Client) Join(room string) error {
-	_, err := cl.ask(Msg{Op: "join", Room: room})
+	r, err := cl.ask(Msg{Op: "join", Room: room})
 	if err == nil {
-		cl.Room = room
+		cl.Room, cl.Me = room, r.From
 	}
 	return err
 }
 
-// Send tells the room where this player is; it does not wait for the network.
-func (cl *Client) Send(p Pos) {
-	go cl.send(Msg{Op: "pos", Pos: &p})
+// Send passes m to the other players, in order, without waiting for the network. With
+// the network that far behind it is dropped.
+func (cl *Client) Send(m Msg) {
+	select {
+	case cl.out <- m:
+	default:
+	}
 }
 
-// Others gives the other players' last places.
-func (cl *Client) Others() []Pos {
+// Events takes the messages that came in since the last call.
+func (cl *Client) Events() []Msg {
 	cl.mu.Lock()
 	defer cl.mu.Unlock()
-	ps := make([]Pos, 0, len(cl.pos))
-	for _, p := range cl.pos {
-		ps = append(ps, p)
+	ev := cl.events
+	cl.events = nil
+	return ev
+}
+
+// Others gives the other players' last places by number.
+func (cl *Client) Others() map[int]Pos {
+	cl.mu.Lock()
+	defer cl.mu.Unlock()
+	ps := make(map[int]Pos, len(cl.pos))
+	for k, p := range cl.pos {
+		ps[k] = p
 	}
 	return ps
 }

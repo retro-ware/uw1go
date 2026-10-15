@@ -6,23 +6,19 @@ import (
 )
 
 // Experimental online play (not in the original): before the main menu the player may
-// host a game on the relay at RelayURL or join one hosted there. Each player runs their
-// own world; only where each one is goes over the network, and the others are drawn in
-// the 3D view as fighters where they stand. Nothing else is shared yet: creatures, doors
-// and items are each player's own.
+// host a game on the relay at RelayURL or join one hosted there. Each player has their
+// own character; the world is the host's and is kept the same for both (onlinesync.go),
+// and each sees the other as an adventurer walking about (onlinepeer.go).
 
 var (
-	// RelayURL is the relay's address (ws:// or wss://); empty, no online menu.
-	RelayURL  string
-	online    *mp.Client
-	lastSent  mp.Pos
-	sentAt    uint32
-	peersSeen []mp.Pos
+	// RelayURL is the relay's address (ws:// or wss://); empty or "off", no online menu.
+	RelayURL string
+	online   *mp.Client
 )
 
 // onlineMenu asks whether to play alone, host or join, before the main menu.
 func onlineMenu() {
-	if RelayURL == "" {
+	if RelayURL == "" || RelayURL == "off" {
 		return
 	}
 	var pal [0x300]byte
@@ -132,70 +128,3 @@ func onlineNotice(pal []byte, msg string) {
 }
 
 func onlineError(pal []byte, msg string) { onlineNotice(pal, msg) }
-
-// onlineTick sends this player's place when it changed (at most 20 times a second, and
-// once a second regardless) and redraws the view when another player moved.
-func onlineTick() {
-	if online == nil || !inGame {
-		return
-	}
-	now := GameTime()
-	p := mp.Pos{Level: PlayerLevel, X: PN.X, Y: PN.Y, Z: PN.Z, Heading: PlayerFacing}
-	p.Moving = p.X != lastSent.X || p.Y != lastSent.Y
-	if (p != lastSent && now-sentAt >= 0x10) || now-sentAt >= 0x100 {
-		online.Send(p)
-		lastSent, sentAt = p, now
-	}
-	others := online.Others()
-	if !samePeers(others, peersSeen) {
-		peersSeen = others
-		editchng(2)
-	}
-}
-
-func samePeers(a, b []mp.Pos) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
-}
-
-// drawPeers draws the other players standing on the tile at tmptr, after its objects.
-func drawPeers() {
-	if online == nil || PickUp != 0 {
-		return
-	}
-	for _, p := range peersSeen {
-		if p.Level != PlayerLevel || int(p.X>>8)+int(p.Y>>8)*MAP_SIZE != tmptr {
-			continue
-		}
-		fx, fy := int(p.X&0xFF), int(p.Y&0xFF)
-		var x, y int
-		switch quad { // the tile's place turned into the first quadrant, as doObj turns mobiles'
-		case 0:
-			x, y = fx, fy
-		case 1:
-			x, y = 0xFF-fy, fx
-		case 2:
-			x, y = 0xFF-fx, 0xFF-fy
-		case 3:
-			x, y = fy, 0xFF-fx
-		}
-		objxloc = (loopx-16)<<8 + x
-		objzloc = loopy<<8 + y
-		objyloc = int(p.Z)
-		dir := int(dirtab[(int(uint16(p.Heading))>>11+0x20-int((uint16(cPlayer.heading)+headmod[quad])>>11))%0x20])
-		frame := 0
-		if (dir+5)&7 >= 3 {
-			frame = dir + 0x20
-		}
-		if pic, ok := critterPic(ITEM_FIGHTER_5D&0x3F, int(sqmod)*lighton, frame, 0); ok {
-			rend.CritterSprite(objPoint(), pic)
-		}
-	}
-}

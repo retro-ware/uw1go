@@ -18,6 +18,9 @@ var (
 	DoAnimO   = true
 	animcount int
 	animlist  [MAX_ANIMS]Anim
+	// animMine marks the animations this player started (online play: those that came
+	// with the level are its owner's, onlineOwnsLevel)
+	animMine [MAX_ANIMS]bool
 )
 
 // remAnimFromMap removes animation n's object from its tile and frees it.
@@ -39,6 +42,7 @@ func remAnimFromList(index int) {
 	if i < animcount {
 		if animcount--; animcount > 0 && animcount != i {
 			animlist[i] = animlist[animcount]
+			animMine[i] = animMine[animcount]
 		}
 	}
 }
@@ -125,6 +129,7 @@ func addAnimobj(index, length, a, x, y int) int {
 		}
 	}
 	AnimObjInPipe = 1
+	animMine[animcount] = true
 	animcount++
 	return animcount
 }
@@ -175,6 +180,9 @@ func updateAnimobj(frames int) {
 		editchng(2)
 	}
 	for i := 0; i < animcount; i++ {
+		if !animMine[i] && !onlineOwnsLevel() {
+			continue // the other player runs it
+		}
 		if animlist[i].len == -1 {
 			doAnimobj(i, t)
 			continue
@@ -355,11 +363,17 @@ func AnimLoad(arc *Arc, level int) bool {
 		}
 	}
 	animcount = count
+	animMine = [MAX_ANIMS]bool{}
 	return true
 }
 
 // AnimSave writes the animation list as LEV.ARK block level+8.
 func AnimSave(arc *Arc, level int) bool {
+	return putArc(arc, level+8, animBytes())
+}
+
+// animBytes is the animation list as LEV.ARK keeps it.
+func animBytes() []byte {
 	if animcount < MAX_ANIMS {
 		animlist[animcount].link.SetIndex(0)
 	}
@@ -370,5 +384,5 @@ func AnimSave(arc *Arc, level int) bool {
 		o[2], o[3] = byte(e.len), byte(uint16(e.len)>>8)
 		o[4], o[5] = e.x, e.y
 	}
-	return putArc(arc, level+8, b)
+	return b
 }
