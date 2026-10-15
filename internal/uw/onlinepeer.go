@@ -37,6 +37,7 @@ var (
 	avatarSlot int // this player's avatar; 0 none
 	avatarSq   int
 	avatarAt   time.Time // its last walking step
+	avatarHold time.Time // until then, not placed again before the other's is here
 	hurtPoison int       // the poison of the creature's blow being dealt
 )
 
@@ -71,6 +72,9 @@ func peersTick(now time.Time) {
 			dropAvatar(ps.gone)
 			ps.gone = here
 		}
+		if isPeerAvatar(ps.gone) && Level.Objs[ps.gone].Item() == ITEM_ADVENTURER {
+			unfree(ps.gone)
+		}
 	}
 }
 
@@ -80,11 +84,16 @@ func placeAvatar(now time.Time) {
 		return
 	}
 	if avatarSlot == 0 {
+		if now.Before(avatarHold) && !peerAvatarHere() {
+			return
+		}
+		avatarHold = time.Time{}
 		if critptr < 0 || !onlineTakeFree(Level.MobFree[:], critptr) {
 			return
 		}
 		avatarSlot = int(Level.MobFree[critptr])
 		critptr--
+		unfree(avatarSlot)
 		o := &Level.Objs[avatarSlot]
 		*o = Object{}
 		o.SetItem(ITEM_ADVENTURER)
@@ -140,7 +149,10 @@ func removeAvatar() {
 	if avatarSq >= 0 {
 		ObjRem(&Level.Tiles[avatarSq].Objects, &Level.Objs[avatarSlot])
 	}
-	ObjFree(&Level.Objs[avatarSlot])
+	if !isFree(avatarSlot) {
+		ObjFree(&Level.Objs[avatarSlot])
+	}
+	Level.Objs[avatarSlot] = Object{} // free: no avatar there (dropStaleAvatars)
 	avatarSlot = 0
 }
 
@@ -170,9 +182,7 @@ func dropAvatar(i int) {
 	if o.Item() != ITEM_ADVENTURER {
 		return
 	}
-	if head := &Level.Tiles[o.HomeX()+o.HomeY()<<6].Objects; linkedIn(head, i) {
-		ObjRem(head, o)
-	}
+	unlinkAnywhere(i)
 	*o = Object{}
 	editchng(2)
 }
@@ -302,4 +312,93 @@ func linkedIn(head *Link, i int) bool {
 		j = Level.Objs[j].Next()
 	}
 	return false
+}
+
+// unlinkAnywhere takes object i out of its square's list: the one it says it is on, or,
+// where a diff moved it without its list, whichever has it.
+func unlinkAnywhere(i int) {
+	o := &Level.Objs[i]
+	if head := &Level.Tiles[o.HomeX()+o.HomeY()<<6].Objects; linkedIn(head, i) {
+		ObjRem(head, o)
+		return
+	}
+	for t := range Level.Tiles {
+		if head := &Level.Tiles[t].Objects; linkedIn(head, i) {
+			ObjRem(head, o)
+			return
+		}
+	}
+}
+
+// avatarAgain takes this player's avatar off the level just sent, and starts the
+// comparison anew, so that the avatar is placed again and goes with the next diff.
+//
+// The other player's avatar goes too: they load the level without it and place it
+// again. Theirs is placed first, so that the two are not linked into a square at once.
+func avatarAgain() {
+	removeAvatar()
+	dropPeerAvatars()
+	syncSnap = nil
+	avatarHold = time.Now().Add(avatarHoldMax)
+}
+
+// avatarHoldMax is how long avatarAgain waits for the other player's avatar at most.
+const avatarHoldMax = 3 * time.Second
+
+// peerAvatarHere says whether another player's avatar is linked into its square.
+func peerAvatarHere() bool {
+	for _, p := range peers {
+		if p.gone > 1 && p.gone < NUM_MOBILE {
+			o := &Level.Objs[p.gone]
+			if o.Item() == ITEM_ADVENTURER && linkedIn(&Level.Tiles[o.HomeX()+o.HomeY()<<6].Objects, p.gone) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// dropStaleAvatars clears the avatars a level was loaded with: levels are kept and sent
+// without them in their squares (a saved game keeps their records), so any is left over,
+// and its player places theirs again. A slot of this player's goes back on the free
+// stack; the other player's stays theirs to take again.
+func dropStaleAvatars() {
+	if online == nil {
+		return
+	}
+	for i := 2; i < NUM_MOBILE; i++ {
+		o := &Level.Objs[i]
+		if o.Item() != ITEM_ADVENTURER {
+			continue
+		}
+		unlinkAnywhere(i)
+		if i%mp.MaxPlayers == online.Me && !isFree(i) {
+			ObjFree(o)
+		}
+		*o = Object{}
+	}
+	for _, p := range peers {
+		p.gone = 0
+	}
+}
+
+// isFree says whether mobile slot i is on the free stack.
+func isFree(i int) bool {
+	for k := critptr; k >= 0; k-- {
+		if int(Level.MobFree[k]) == i {
+			return true
+		}
+	}
+	return false
+}
+
+// unfree takes mobile slot i, an avatar in use, off the free stack: a level saved or
+// sent while it was freed can have it there still, to be handed out twice.
+func unfree(i int) {
+	for k := critptr; k >= 0; k-- {
+		if int(Level.MobFree[k]) == i {
+			copy(Level.MobFree[k:critptr], Level.MobFree[k+1:critptr+1])
+			critptr--
+		}
+	}
 }

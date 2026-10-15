@@ -47,13 +47,23 @@ func GetLevel(level int) int {
 		}
 	}
 	closeArc(&arc)
+	if ok > 0 {
+		dropStaleAvatars()
+	}
 	return ok
 }
 
-// SaveLevel writes level back into SAVE0's LEV.ARK, without the player's inventory.
+// SaveLevel writes level back into SAVE0's LEV.ARK, without the player's inventory, as
+// the player leaves it: the avatars leave it too.
 func SaveLevel(level int) bool {
 	removeAvatar()
 	dropPeerAvatars()
+	return saveLevel(level)
+}
+
+// saveLevel writes level into SAVE0's LEV.ARK as SaveLevel does, the avatars left out of
+// it but not off the level being played (a game saved while online plays on).
+func saveLevel(level int) bool {
 	SavePlayerInv("")
 	FreePlayerInv(&ThePlayer.OL)
 	if GrSq >= 0 {
@@ -64,7 +74,7 @@ func SaveLevel(level int) bool {
 	var arc Arc
 	ok := openArc(&arc, "SAVE0\\lev.ark")
 	if ok {
-		ok = MapSave(&arc, level)
+		withoutAvatars(func() { ok = MapSave(&arc, level) })
 		ok = ok && TxmSave(&arc, level)
 		ok = ok && SaveAutoMapLevel(&arc, level)
 		ok = closeArc(&arc) && ok
@@ -169,6 +179,12 @@ func quickLoad() {
 
 // restoredGame redraws and resets after a restore.
 func restoredGame() {
+	restoredScreen()
+	onlineRestored()
+}
+
+// restoredScreen redraws after the player was restored.
+func restoredScreen() {
 	loadWeapcm()
 	displayScr()
 	realDScheck = true
@@ -186,6 +202,7 @@ func RestoreGame(slot int) bool {
 	if clearDir(homeDir) {
 		gameSprint(0xAA)
 		if copyDir(slotDir(slot), homeDir) {
+			takePeerSave()
 			gameSprint(0xAA)
 			resetGame()
 			if RestorePlayerInv(homeDir) {
@@ -230,11 +247,12 @@ func saveToSlot(slot int, s string) bool {
 	gameSprint(0xAA)
 	if SavePlayerInv(homeDir) {
 		gameSprint(0xAA)
-		if SaveLevel(PlayerLevel) {
+		if saveLevel(PlayerLevel) {
 			gameSprint(0xAA)
 			if copyDir(homeDir, dir) {
 				scrollPrint("\\0")
 				scrollClear(true)
+				onlineSaved(slot, s)
 				return true
 			}
 		}

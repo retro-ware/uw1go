@@ -55,6 +55,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+	uw.ClaimWorkDir()
 	if err := host.Run("Ultima Underworld", *scale, uw.Main); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)

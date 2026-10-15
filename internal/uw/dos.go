@@ -30,6 +30,7 @@ func dosPath(name string) string {
 	base := GameDir
 	if len(parts) > 0 && strings.HasPrefix(strings.ToUpper(parts[0]), "SAVE") {
 		base = SaveDir
+		parts[0] += workSuffix // a second copy's own working folder and saves
 	}
 	for i, p := range parts {
 		if i == len(parts)-1 {

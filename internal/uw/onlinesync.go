@@ -48,6 +48,7 @@ var (
 	syncAt    time.Time
 	wantAt    time.Time // when a level was asked for; synced again after wantWait regardless
 	helloSent bool
+	worldGen  int   // the world being played: diffs made in an older one are stale
 	freed     []int // the other player's slots freed here, to go with the next diff
 	sentSeq   int   // the number of the last diff sent
 	seenSeq   int   // the number of the last diff taken from the other
@@ -58,7 +59,7 @@ var (
 
 // Protocol names what the online messages mean; players with different ones cannot play
 // together. Change it whenever they change.
-const Protocol = "uw1go-online-5"
+const Protocol = "uw1go-online-7"
 
 // onlineTick runs once a main loop pass while online.
 func onlineTick() {
@@ -98,7 +99,7 @@ func onlineTick() {
 					}
 				}
 				debugDiff(fmt.Sprintf("send %d", sentSeq), d)
-				online.Send(mp.Msg{Op: "diff", Level: PlayerLevel, Data: d, Slots: freed, Seq: sentSeq, Ack: seenSeq})
+				online.Send(mp.Msg{Op: "diff", Level: PlayerLevel, Data: d, Slots: freed, Seq: sentSeq, Ack: seenSeq, Gen: worldGen})
 			}
 			freed = nil
 		}
@@ -133,31 +134,25 @@ func onlineEvent(m mp.Msg) {
 			online.Send(mp.Msg{Op: "mismatch", Text: Protocol})
 			return
 		}
-		online.Send(mp.Msg{Op: "questall", Data: questState()})
-		for l := 1; l <= 9; l++ {
-			msg := mp.Msg{Op: "init", Level: l, Seq: sentSeq}
-			if l == PlayerLevel {
-				msg.Data, msg.Anim = liveLevelBlock()
-				msg.Slots = animOurList()
-			} else {
-				msg.Data, msg.Anim = savedLevelBlock(l)
-			}
-			if msg.Data != nil {
-				online.Send(msg)
-			}
-		}
+		sendPeerSave()
+		sendWorld()
 	case "want":
 		if m.Level == PlayerLevel && synced {
 			data, anim := liveLevelBlock()
 			online.Send(mp.Msg{Op: "level", Level: m.Level, Data: data, Anim: anim, Seq: sentSeq, Slots: animOurList()})
+			avatarAgain()
 		}
 	case "init", "level", "saved":
 		// init: the host's world for a joiner; level: a level as it is now, asked for;
 		// saved: a level the other left, as saved. Only the first two replace the level
 		// being played.
 		current := m.Level == PlayerLevel
+		dprintf("mp %s level %d (playing %d, synced %v)\n", m.Op, m.Level, PlayerLevel, synced)
 		if current && m.Op == "saved" {
 			return
+		}
+		if m.Op == "init" {
+			worldGen = m.Gen
 		}
 		writeLevelBlock(m.Level, m.Data, m.Anim)
 		if current {
@@ -169,8 +164,10 @@ func onlineEvent(m mp.Msg) {
 		if m.Op == "init" && m.Level == 9 {
 			synced = true
 		}
+	case "save", "saved2", "player":
+		onlineSaveEvent(m)
 	case "diff":
-		if synced && m.Level == PlayerLevel && syncSnap != nil {
+		if synced && m.Level == PlayerLevel && syncSnap != nil && m.Gen == worldGen {
 			seenSeq = m.Seq
 			debugDiff(fmt.Sprintf("take %d ack %d", m.Seq, m.Ack), m.Data)
 			applyDiff(m.Data, onlineOwnsLevel(), m.Ack)
@@ -395,29 +392,56 @@ func resetSync() {
 	changedIn = make([]int, syncLen)
 }
 
+// sendWorld gives the other player the host's world: the quests and all nine levels.
+func sendWorld() {
+	worldGen++ // the other's diffs still under way are of the world before
+	online.Send(mp.Msg{Op: "questall", Data: questState()})
+	for l := 1; l <= 9; l++ {
+		msg := mp.Msg{Op: "init", Level: l, Seq: sentSeq, Gen: worldGen}
+		if l == PlayerLevel {
+			msg.Data, msg.Anim = liveLevelBlock()
+			msg.Slots = animOurList()
+		} else {
+			msg.Data, msg.Anim = savedLevelBlock(l)
+		}
+		if msg.Data != nil {
+			online.Send(msg)
+		}
+	}
+	avatarAgain()
+}
+
+// onlineRestored follows a saved game loaded while online: it replaced this player's
+// world, so the host gives the other the restored one, and a joiner asks for the host's
+// again (keeping the restored player, as on joining).
+func onlineRestored() {
+	if online == nil {
+		return
+	}
+	syncLevel = PlayerLevel
+	resetSync()
+	if online.Me == 0 || peerSave != nil { // a slot saved together is the world for both
+		if len(peers) > 0 {
+			sendPeerSave()
+			sendWorld()
+		}
+		return
+	}
+	helloSent = false
+}
+
 // liveLevelBlock is the current level as MapSave would write it, without this player's
-// own objects, and its animation list.
+// own objects and without avatars, and its animation list. The receiver loads it anew,
+// so this player's avatar is placed again afterwards (avatarAgain), to go with a diff:
+// sent in the block, the one it places after loading would be linked in twice.
 func liveLevelBlock() (data, anim []byte) {
 	Level.NActive = uint16(nActive)
 	Level.NMobFree = uint16(critptr)
 	Level.NStatFree = uint16(objptr)
 	Level.Magic = LEVEL_MAGIC
 	withoutPlayer(func() {
-		// the other player's avatar neither: they have it, and make it anew
-		var gone []int
-		for _, p := range peers {
-			if isPeerAvatar(p.gone) {
-				o := &Level.Objs[p.gone]
-				if head := &Level.Tiles[o.HomeX()+o.HomeY()<<6].Objects; linkedIn(head, p.gone) {
-					ObjRem(head, o)
-					gone = append(gone, p.gone)
-				}
-			}
-		}
-		data = Level.encode()
+		gone := withoutAvatars(func() { data = Level.encode() })
 		for _, i := range gone {
-			o := &Level.Objs[i]
-			ObjAdd(&Level.Tiles[o.HomeX()+o.HomeY()<<6].Objects, o)
 			off, n := recordRange(i)
 			clear(data[off : off+n])
 		}
@@ -429,6 +453,33 @@ func liveLevelBlock() (data, anim []byte) {
 		}
 	}
 	return data, animBytes()
+}
+
+// withoutAvatars runs f with every player's avatar taken off the level, and says which
+// slots they were in.
+func withoutAvatars(f func()) (gone []int) {
+	slots := []int{avatarSlot}
+	for _, p := range peers {
+		if isPeerAvatar(p.gone) {
+			slots = append(slots, p.gone)
+		}
+	}
+	for _, i := range slots {
+		if i <= 1 {
+			continue
+		}
+		o := &Level.Objs[i]
+		if head := &Level.Tiles[o.HomeX()+o.HomeY()<<6].Objects; linkedIn(head, i) {
+			ObjRem(head, o)
+			gone = append(gone, i)
+		}
+	}
+	f()
+	for _, i := range gone {
+		o := &Level.Objs[i]
+		ObjAdd(&Level.Tiles[o.HomeX()+o.HomeY()<<6].Objects, o)
+	}
+	return gone
 }
 
 // savedLevelBlock is level as SAVE0's LEV.ARK has it.

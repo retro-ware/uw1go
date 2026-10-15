@@ -47,6 +47,7 @@ type Msg struct {
 	Data  []byte   `json:"data,omitempty"`
 	Anim  []byte   `json:"anim,omitempty"`
 	Text  string   `json:"text,omitempty"`
+	Gen   int      `json:"gen,omitempty"` // which world a diff or level is of: each one sent anew counts up
 }
 
 // Pos is where a player is: the level, the place in the game's units (x and y in 1/256
