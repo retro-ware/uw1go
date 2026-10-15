@@ -1,34 +1,37 @@
-// Package mp is the experimental online multiplayer: a relay that keeps rooms of two
-// players and passes each one's messages to the other, and the client the game talks to
-// it with. The relay knows nothing of the game; what the messages mean is the game's.
+// Package mp is the game's side of the experimental online multiplayer: its messages,
+// and the connection to the other player through a rendezvous server
+// (github.com/memmaker/rendezvous), which introduces the two and relays for them until
+// they connect directly. The server knows nothing of the game; what the messages mean
+// is the game's.
 package mp
 
 import (
-	"context"
-	"errors"
-	"math/rand/v2"
-	"sync"
+	"encoding/json"
+	"net"
+	"net/http"
+	"strconv"
 	"time"
 
-	"github.com/coder/websocket"
-	"github.com/coder/websocket/wsjson"
+	"github.com/memmaker/rendezvous"
+	"github.com/memmaker/rendezvous/client"
 )
 
 // MaxPlayers is the players a room takes. The host is player 0.
 const MaxPlayers = 2
 
-// readLimit takes a whole level block in one message.
-const readLimit = 1 << 20
+// Port is where a hosting game listens without a server (TCP and UDP), and where the
+// rendezvous server listens by default.
+const Port = 7781
 
 // Msg is every message between a client and the relay. Op says which fields count. To the
-// relay and back:
+// server and back:
 //
 //	host  → room (Room, From: the player's number)
 //	list  → rooms (Rooms)
 //	join  (Room) → joined (Room, From), or error (Err)
 //	left  (From)  from the relay: a player of the room has gone
 //
-// Any other op is the game's: the relay passes it to the rest of the room with From set
+// Any other op is the game's: the server passes it to the rest of the room with From set
 // to the sender's number.
 type Msg struct {
 	Op    string   `json:"op"`
@@ -59,130 +62,73 @@ type Pos struct {
 	Avatar  int   `json:"a,omitempty"` // the player's avatar's object slot on the level`
 }
 
-// Client is one connection to the relay.
+// Client is one connection to the server and, through it, to the other player.
 type Client struct {
-	c      *websocket.Conn
-	answer chan Msg
-	out    chan Msg
-	mu     sync.Mutex
-	pos    map[int]Pos // the other players by number
-	events []Msg
-	Room   string
-	Me     int // this player's number in the room
+	c   *client.Conn
+	pos map[int]Pos // the other players by number
+	// Room is the game's code and Me this player's number in it.
+	Room string
+	Me   int
 }
 
-// Dial connects to the relay at url (ws:// or wss://).
-func Dial(url string) (*Client, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	c, _, err := websocket.Dial(ctx, url, nil)
+// Dial connects to the server at url (host:port, ws:// or wss://) for games of this
+// protocol version: only players with the same one meet.
+func Dial(url, protocol string) (*Client, error) {
+	c, err := client.Dial(url, protocol)
 	if err != nil {
 		return nil, err
 	}
-	c.SetReadLimit(readLimit)
-	cl := &Client{c: c, answer: make(chan Msg, 1), out: make(chan Msg, 256), pos: map[int]Pos{}}
-	go cl.read()
-	go cl.write()
-	return cl, nil
+	return &Client{c: c, pos: map[int]Pos{}}, nil
 }
 
-func (cl *Client) read() {
-	defer close(cl.answer)
-	for {
+// Host opens a room and returns its name.
+func (cl *Client) Host() (string, error) {
+	room, err := cl.c.Host()
+	cl.Room, cl.Me = cl.c.Room, cl.c.Me
+	return room, err
+}
+
+// List gives the open rooms.
+func (cl *Client) List() ([]string, error) { return cl.c.List() }
+
+// Join enters a room.
+func (cl *Client) Join(room string) error {
+	err := cl.c.Join(room)
+	cl.Room, cl.Me = cl.c.Room, cl.c.Me
+	return err
+}
+
+// Send passes m to the other players, in order, without waiting for the network. With
+// the network that far behind it is dropped.
+func (cl *Client) Send(m Msg) { cl.c.Send(m) }
+
+// Events takes the messages that came in since the last call, the other players'
+// positions kept aside for Others.
+func (cl *Client) Events() []Msg {
+	var ev []Msg
+	for _, raw := range cl.c.Recv() {
 		var m Msg
-		if err := wsjson.Read(context.Background(), cl.c, &m); err != nil {
-			return
+		if json.Unmarshal(raw.Data, &m) != nil {
+			continue
 		}
-		cl.mu.Lock()
+		m.From = raw.From
 		switch m.Op {
-		case "room", "rooms", "joined", "error":
-			select {
-			case cl.answer <- m:
-			default:
-			}
 		case "pos":
 			if m.Pos != nil {
 				cl.pos[m.From] = *m.Pos
 			}
 		case "left":
 			delete(cl.pos, m.From)
-			cl.events = append(cl.events, m)
+			ev = append(ev, m)
 		default:
-			cl.events = append(cl.events, m)
+			ev = append(ev, m)
 		}
-		cl.mu.Unlock()
 	}
-}
-
-func (cl *Client) write() {
-	for m := range cl.out {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		wsjson.Write(ctx, cl.c, m)
-		cancel()
-	}
-}
-
-// ask sends m and waits for the relay's answer.
-func (cl *Client) ask(m Msg) (Msg, error) {
-	cl.out <- m
-	select {
-	case r, ok := <-cl.answer:
-		if !ok {
-			return Msg{}, errors.New("the relay closed the connection")
-		}
-		if r.Err != "" {
-			return r, errors.New(r.Err)
-		}
-		return r, nil
-	case <-time.After(5 * time.Second):
-		return Msg{}, errors.New("the relay does not answer")
-	}
-}
-
-// Host opens a room and returns its name.
-func (cl *Client) Host() (string, error) {
-	r, err := cl.ask(Msg{Op: "host"})
-	cl.Room, cl.Me = r.Room, r.From
-	return r.Room, err
-}
-
-// List gives the open rooms.
-func (cl *Client) List() ([]string, error) {
-	r, err := cl.ask(Msg{Op: "list"})
-	return r.Rooms, err
-}
-
-// Join enters a room.
-func (cl *Client) Join(room string) error {
-	r, err := cl.ask(Msg{Op: "join", Room: room})
-	if err == nil {
-		cl.Room, cl.Me = room, r.From
-	}
-	return err
-}
-
-// Send passes m to the other players, in order, without waiting for the network. With
-// the network that far behind it is dropped.
-func (cl *Client) Send(m Msg) {
-	select {
-	case cl.out <- m:
-	default:
-	}
-}
-
-// Events takes the messages that came in since the last call.
-func (cl *Client) Events() []Msg {
-	cl.mu.Lock()
-	defer cl.mu.Unlock()
-	ev := cl.events
-	cl.events = nil
 	return ev
 }
 
-// Others gives the other players' last places by number.
+// Others gives the other players' last places by number, as of the last Events.
 func (cl *Client) Others() map[int]Pos {
-	cl.mu.Lock()
-	defer cl.mu.Unlock()
 	ps := make(map[int]Pos, len(cl.pos))
 	for k, p := range cl.pos {
 		ps[k] = p
@@ -190,15 +136,28 @@ func (cl *Client) Others() map[int]Pos {
 	return ps
 }
 
-// Close leaves the relay.
-func (cl *Client) Close() { cl.c.Close(websocket.StatusNormalClosure, "") }
+// Direct tells whether the messages go straight to the other player.
+func (cl *Client) Direct() bool { return cl.c.Direct() }
 
-// RoomName makes a room name of four letters easy to read out.
-func RoomName() string {
-	const letters = "ABCDEFGHJKLMNPQRSTUVWXYZ"
-	b := make([]byte, 4)
-	for i := range b {
-		b[i] = letters[rand.IntN(len(letters))]
+// Close leaves the game.
+func (cl *Client) Close() { cl.c.Close() }
+
+// NewRelay is a server as an HTTP handler, for tests.
+func NewRelay() http.Handler { return rendezvous.New() }
+
+// ServeLAN runs a rendezvous server in this game on Port, for hosting without a server,
+// and returns its address on the network for this game to dial and others to join by.
+func ServeLAN() (string, error) {
+	if _, _, err := rendezvous.Start(":" + strconv.Itoa(Port)); err != nil {
+		return "", err
 	}
-	return string(b)
+	return net.JoinHostPort(client.LocalIP(), strconv.Itoa(Port)), nil
+}
+
+// Announce tells the local network about the room this game hosts, so Find hears it.
+func Announce(protocol, room string) { client.Announce(protocol, room, Port) }
+
+// Find waits up to timeout for a host on the local network and returns its address and room.
+func Find(protocol string, timeout time.Duration) (addr, room string, err error) {
+	return client.Find(protocol, Port, timeout)
 }

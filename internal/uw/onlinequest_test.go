@@ -39,12 +39,12 @@ func TestQuestMerge(t *testing.T) {
 	srv := httptest.NewServer(mp.NewRelay())
 	defer srv.Close()
 	url := "ws" + strings.TrimPrefix(srv.URL, "http")
-	hc, err := mp.Dial(url)
+	hc, err := mp.Dial(url, Protocol)
 	if err != nil {
 		t.Fatal(err)
 	}
 	room, _ := hc.Host()
-	jc, _ := mp.Dial(url)
+	jc, _ := mp.Dial(url, Protocol)
 	if err := jc.Join(room); err != nil {
 		t.Fatal(err)
 	}

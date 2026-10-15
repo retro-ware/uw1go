@@ -4,7 +4,8 @@ Ultima Underworld: The Stygian Abyss (1992), ported to Go and
 [Ebiten](https://ebitengine.org). It runs on the original game files and
 reads all of its data from them, UW.EXE's tables included. No game data is
 in this repository: you need your own copy of the DOS game (the GOG version
-works).
+works). The releases (`./release.sh TAG`, private repository) bundle the
+game: a macOS .app and a Windows folder that start right away.
 
 The port follows the decompiled source of
 [underworld-exhumed](https://github.com/memmaker/underworld-exhumed)
@@ -114,22 +115,43 @@ conflict over it, and new objects come from separate halves of the free
 list so they never collide. The other player is drawn as the adventurer,
 walking in eight directions. Two players per game.
 
+The players' machines talk to each other directly; a server is only the
+meeting point. Each player sends a UDP packet to the server, which learns
+their public addresses and tells each the other's; both then send to each
+other, which opens their NATs (UDP hole punching), and the game runs over a
+QUIC connection between them (ordered, lossless). Where that fails (both
+behind symmetric NATs) the server passes the messages on instead. The
+browser build has no UDP and always goes through the server.
+
+**With a server:** the menu's "Server" line names it (host:port; the
+default is ruzzoli.de). "Host a game" opens a room there and "Join a game"
+lists the open ones. The server is [rendezvous](https://github.com/memmaker/rendezvous),
+a generic meeting point shared with other games (rooms are per game and
+protocol version); run it anywhere with TCP and UDP port 7781 open:
+
 ```sh
-go run ./cmd/uw1relay -addr 127.0.0.1:7781          # a relay (ruzzoli.de runs one on demand)
-go run ./cmd/uw1 -relay ws://127.0.0.1:7781 -data /path/to/UW
+rendezvous -addr :7781                              # from that repo's releases
+go run ./cmd/uw1 -relay myserver.example:7781 -data /path/to/UW
 ```
 
-`-host` hosts a game right away and `-join CODE` joins one (CODE may be the
-invite link). Hosting shows an invite link, `https://ruzzoli.de/goplay/?join=CODE`
-(in the browser it is also copied to the clipboard): opened in a browser
-where Ultima Underworld is installed, goplay starts the game and joins.
-Desktop and browser players play together on the same relay; the joiner's
-build must match the host's (`uw.Protocol`), else they play alone.
+**Without a server (LAN, or a host with port 7781 forwarded):** set the
+server to none; the host's game is the meeting point itself, on TCP and UDP
+7781 (Windows asks once to let it through the firewall). It announces
+itself on the local network, so the joiner's "Join a game" offers it; from
+elsewhere the joiner types the host's ip:port, or starts with
+`-join ws://HOST-IP:7781/ROOM`.
 
-`-relay` defaults to `UW1GO_RELAY`, else `wss://ruzzoli.de/goplay/uw1relay`
-(in the browser, the page's own host); `-relay off` skips the menu.
-`deploy/relay/install.sh` installs the relay on the server as a systemd
-socket-activated service that exits when idle.
+`-host` hosts a game right away and `-join CODE` joins one (CODE may be the
+invite link). Hosting on the public server shows an invite link,
+`https://ruzzoli.de/goplay/?join=CODE` (in the browser it is also copied to
+the clipboard): opened in a browser where Ultima Underworld is installed,
+goplay starts the game and joins. Desktop and browser players play together
+on the same server; the joiner's build must match the host's
+(`uw.Protocol`), else they play alone.
+
+`-relay` defaults to `UW1GO_RELAY`, else `ruzzoli.de:7781` (in the browser,
+`wss://HOST/goplay/uw1relay` on the page's own host, which nginx passes to
+the same server); `-relay off` means no server.
 
 Each player is an adventurer in the other's world, an object of the level
 like any other: drawn, walked into, fought by creatures (they go for the

@@ -1,7 +1,9 @@
 package uw
 
 import (
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/memmaker/uw1go/internal/gr"
 	"github.com/memmaker/uw1go/internal/mp"
@@ -13,8 +15,12 @@ import (
 // and each sees the other as an adventurer walking about (onlinepeer.go).
 
 var (
-	// RelayURL is the relay's address (ws:// or wss://); empty or "off", no online menu.
+	// RelayURL is the server's address (host:port, ws:// or wss://); empty or "off", games
+	// are hosted and joined between the players' machines (the host's game is the meeting
+	// point).
 	RelayURL string
+	// DefaultRelay is the public server, the one the invite links' page knows.
+	DefaultRelay string
 	// AutoHost and AutoJoin skip the menu: host a game, or join the game with that code.
 	AutoHost bool
 	AutoJoin string
@@ -25,13 +31,15 @@ var (
 	online *mp.Client
 )
 
-// onlineMenu asks whether to play alone, host or join, before the main menu.
+// onlineMenu asks whether to play alone, host or join, before the main menu. With a
+// server set (RelayURL) games are hosted and joined there; without, the host's game is
+// the meeting point itself and the joiner types its address.
 func onlineMenu() {
-	if RelayURL == "" || RelayURL == "off" {
-		return
-	}
 	var pal [0x300]byte
 	readQuikpal(PAL_OPENING, pal[:])
+	if RelayURL == "off" {
+		RelayURL = ""
+	}
 	if code := AutoJoin; code != "" {
 		AutoJoin = ""
 		if onlineJoinCode(pal[:], code) {
@@ -45,8 +53,12 @@ func onlineMenu() {
 		}
 	}
 	for {
+		server := "Server: none (this network)"
+		if RelayURL != "" {
+			server = "Server: " + serverName(RelayURL)
+		}
 		onlineScreen(pal[:])
-		switch parseStartInput(nil, []string{"Play alone", "Host an online game", "Join an online game"}, 0) {
+		switch parseStartInput(nil, []string{"Play alone", "Host a game", "Join a game", server}, 0) {
 		case 1:
 			if onlineHost(pal[:]) {
 				return
@@ -55,14 +67,105 @@ func onlineMenu() {
 			if onlineJoin(pal[:]) {
 				return
 			}
+		case 3:
+			onlineScreen(pal[:])
+			if a, ok := onlineAsk(pal[:], "Server (host:port, empty for none):", serverName(RelayURL)); ok {
+				RelayURL = serverURL(a)
+			}
 		default: // play alone (Escape too)
 			return
 		}
 	}
 }
 
-// onlineHost opens a game on the relay and shows how others join it.
+// serverName shows a server URL as the player would type it: its host[:port].
+func serverName(url string) string {
+	if i := strings.Index(url, "://"); i >= 0 {
+		url = url[i+3:]
+	}
+	if i := strings.Index(url, "/"); i >= 0 {
+		url = url[:i]
+	}
+	return url
+}
+
+// serverURL is the address of the server the player typed: host[:port] (plain TCP), or a
+// ws(s):// URL (the browser's way in).
+func serverURL(s string) string {
+	s = strings.TrimSpace(s)
+	switch {
+	case s == "" || strings.EqualFold(s, "none"):
+		return ""
+	case strings.Contains(s, "://") || strings.Contains(s, ":"):
+		return s
+	}
+	return s + ":" + strconv.Itoa(mp.Port)
+}
+
+// onlineHost hosts a game: on the server, or, without one, here, telling the network.
 func onlineHost(pal []byte) bool {
+	if RelayURL == "" {
+		url, err := mp.ServeLAN()
+		if err != nil {
+			onlineError(pal, "Cannot host here: "+err.Error())
+			return false
+		}
+		RelayURL = url
+		ok := onlineHostOn(pal, "(from elsewhere, once port 7781 is forwarded: -join "+url+"/ROOM)")
+		RelayURL = ""
+		if ok {
+			mp.Announce(Protocol, online.Room)
+		}
+		return ok
+	}
+	return onlineHostOn(pal)
+}
+
+// onlineJoin joins a game on the server, or, without one, on the host the player names
+// (a host announcing itself on this network is offered).
+func onlineJoin(pal []byte) bool {
+	if RelayURL != "" {
+		return onlineJoinOn(pal)
+	}
+	onlineScreen(pal)
+	onlineText("Looking for a game...")
+	found, _, _ := mp.Find(Protocol, 2*time.Second)
+	onlineScreen(pal)
+	a, ok := onlineAsk(pal, "Host (ip:port):", found)
+	if !ok || serverURL(a) == "" {
+		return false
+	}
+	RelayURL = serverURL(a)
+	ok = onlineJoinOn(pal)
+	RelayURL = ""
+	return ok
+}
+
+// onlineAsk shows prompt and lets the player type (Enter takes it, Escape gives up).
+func onlineAsk(pal []byte, prompt, text string) (string, bool) {
+	for {
+		onlineScreen(pal)
+		onlineText(prompt, text+"_")
+		key := mouseGetInput()
+		switch {
+		case key < 0:
+			menuCycle()
+		case key == KEY_ENTER:
+			return text, true
+		case key == KEY_ESC || key == 2:
+			return "", false
+		case key == KEY_BACKSPACE && len(text) > 0:
+			text = text[:len(text)-1]
+		case key >= 0x20 && key < 0x7F && len(text) < 60:
+			text += strings.ToLower(string(rune(key)))
+		}
+	}
+}
+
+// onlineHostOn opens a game on the server at RelayURL and shows how others join it:
+// with the invite link where there is a page for it (the public server), else by the
+// server's name and the code.
+func onlineHostOn(pal []byte, more ...string) bool {
 	cl := onlineDial(pal)
 	if cl == nil {
 		return false
@@ -76,7 +179,7 @@ func onlineHost(pal []byte) bool {
 	online = cl
 	dprintf("mp hosting %s\n", room)
 	lines := []string{"Hosting game " + room}
-	if Invite != nil {
+	if Invite != nil && RelayURL == DefaultRelay {
 		link := Invite(room)
 		if Share != nil && Share(link) {
 			lines = append(lines, "Invite link copied:")
@@ -85,14 +188,18 @@ func onlineHost(pal []byte) bool {
 		}
 		lines = append(lines, link)
 	} else {
-		lines = append(lines, "Others join with code "+room)
+		lines = append(lines, "Others join at "+serverName(RelayURL)+" with code "+room)
 	}
-	onlineNotice(pal, lines...)
+	onlineNotice(pal, append(lines, more...)...)
 	return true
 }
 
-// onlineJoinCode joins the game with the code (or the invite link) code.
+// onlineJoinCode joins the game with the code (or the invite link) code. A direct
+// address, HOST:PORT/CODE, names the server too (a LAN host reached over the internet).
 func onlineJoinCode(pal []byte, code string) bool {
+	if i := strings.LastIndex(code, "/"); i > 0 && !strings.Contains(code, "join=") {
+		RelayURL, code = code[:i], code[i+1:]
+	}
 	code = JoinCode(code)
 	cl := onlineDial(pal)
 	if cl == nil {
@@ -119,8 +226,8 @@ func JoinCode(s string) string {
 	return strings.ToUpper(strings.TrimSpace(s))
 }
 
-// onlineJoin lets the player pick one of the relay's open games.
-func onlineJoin(pal []byte) bool {
+// onlineJoinOn lets the player pick one of the open games on the server at RelayURL.
+func onlineJoinOn(pal []byte) bool {
 	cl := onlineDial(pal)
 	if cl == nil {
 		return false
@@ -164,7 +271,7 @@ func (e errString) Error() string { return string(e) }
 func onlineDial(pal []byte) *mp.Client {
 	onlineScreen(pal)
 	onlineText("Connecting...")
-	cl, err := mp.Dial(RelayURL)
+	cl, err := mp.Dial(RelayURL, Protocol)
 	if err != nil {
 		onlineError(pal, "No connection to the relay")
 		return nil
