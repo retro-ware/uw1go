@@ -15,6 +15,8 @@ func main() {
 	defData := "gamedata/UW"
 	if d := os.Getenv("GOPLAY_DATA"); d != "" { // goplay (the browser): the imported game, saves beside it
 		defData = d
+	} else if _, err := os.Stat(filepath.Join("data", "UW.EXE")); err == nil {
+		defData = "data" // goplay: started in games/uw1 with no arguments
 	} else if _, err := os.Stat(defData); err != nil {
 		defData = bundledData(defData)
 	}

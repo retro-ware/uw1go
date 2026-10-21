@@ -5,81 +5,94 @@ import (
 	"image"
 	"image/color"
 	"image/png"
-	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
+
+	"github.com/retro-ware/gameimport"
 )
 
-// importGame (-import, for goplay) finds an Ultima Underworld install anywhere under src
-// (the folder holding UW.EXE and DATA\LEV.ARK), copies what the engine reads into dst
-// (UW.EXE and the DATA, CRIT, CUTS and SOUND folders, plus any saved games in SAVE1 to
-// SAVE4), and writes dst/COVER.PNG from the title screen for the floppy label. Without
-// such a folder it looks in the CD images under src (iso.go), with the CD's write folder
-// UNDEROM1 laid over what comes from the CD.
+// importGame (-import, for goplay) finds an Ultima Underworld install in src, in any
+// packaging gameimport reads (folders, archives, CD images, the GOG installer): the folder
+// holding UW.EXE and DATA\LEV.ARK. It copies what the engine reads into dst (UW.EXE and the
+// DATA, CRIT, CUTS and SOUND folders, plus any saved games in SAVE1 to SAVE4), names
+// upper-cased like the DOS originals, and writes dst/COVER.PNG from the title screen for
+// the floppy label.
+//
+// The GOG installer holds the game as the Ultima Underworld 1 & 2 CD (game.gog, UW1 in its
+// folder UW) beside UNDEROM1, the folder the CD's TSR sends the game's writes to (the
+// files the game changes: DATA\UW.CFG, CUTS\*.N00); it is laid over what comes from the CD.
 func importGame(src, dst string) error {
-	var dir, underom string
-	var images []string
-	filepath.WalkDir(src, func(p string, d fs.DirEntry, _ error) error {
-		if d == nil {
-			return nil
-		}
-		if d.IsDir() {
-			if underom == "" && strings.EqualFold(d.Name(), "UNDEROM1") {
-				underom = p
-			}
-			return nil
-		}
-		if strings.EqualFold(d.Name(), "UW.EXE") {
-			if data := find(filepath.Dir(p), "DATA"); data != "" && find(filepath.Join(filepath.Dir(p), data), "LEV.ARK") != "" {
-				dir = filepath.Dir(p)
-				return fs.SkipAll
+	files, err := gameimport.Find(src, func(name string) bool {
+		for _, part := range strings.Split(strings.ToUpper(name), "/") {
+			if part == "UW.EXE" || part == "UNDEROM1" || keepDir(part) {
+				return true
 			}
 		}
-		if info, err := d.Info(); err == nil && info.Size() > 17*isoSector {
-			images = append(images, p)
-		}
-		return nil
+		return false
 	})
-	if dir == "" {
-		for _, img := range images {
-			ok, err := importISO(img, dst)
-			if err != nil {
-				return err
-			}
-			if ok {
-				if underom != "" {
-					if err := copyTree(underom, dst); err != nil {
-						return err
-					}
-					os.Remove(filepath.Join(dst, "MARKER.FIL"))
-				}
-				if err := soundOn(filepath.Join(dst, "DATA")); err != nil {
-					return err
-				}
-				return writeCover(dst)
-			}
+	if err != nil {
+		return err
+	}
+	root, ok := "", false // the game's folder: "" or ".../"
+	for name := range files {
+		dir, base := path.Split(name)
+		if strings.EqualFold(base, "UW.EXE") && hasFold(files, dir+"DATA/LEV.ARK") && (!ok || len(dir) < len(root)) {
+			root, ok = dir, true
 		}
+	}
+	if !ok {
 		return errors.New("no Ultima Underworld found")
 	}
-	if err := os.MkdirAll(dst, 0o755); err != nil {
-		return err
-	}
-	if err := copyFile(filepath.Join(dir, find(dir, "UW.EXE")), filepath.Join(dst, "UW.EXE")); err != nil {
-		return err
-	}
-	ents, _ := os.ReadDir(dir)
-	for _, e := range ents {
-		if name := strings.ToUpper(e.Name()); e.IsDir() && keepDir(name) {
-			if err := copyTree(filepath.Join(dir, e.Name()), filepath.Join(dst, name)); err != nil {
+	var overlay []string // UNDEROM1's files, after the game's
+	for name, b := range files {
+		up := strings.ToUpper(name)
+		if strings.Contains(up, "UNDEROM1/") {
+			overlay = append(overlay, name)
+			continue
+		}
+		if !strings.HasPrefix(up, strings.ToUpper(root)) {
+			continue
+		}
+		rel := up[len(root):]
+		if first, _, _ := strings.Cut(rel, "/"); rel == "UW.EXE" || strings.Contains(rel, "/") && keepDir(first) {
+			if err := write(filepath.Join(dst, filepath.FromSlash(rel)), b); err != nil {
 				return err
 			}
+		}
+	}
+	for _, name := range overlay {
+		up := strings.ToUpper(name)
+		rel := up[strings.Index(up, "UNDEROM1/")+len("UNDEROM1/"):]
+		if rel == "MARKER.FIL" {
+			continue
+		}
+		if err := write(filepath.Join(dst, filepath.FromSlash(rel)), files[name]); err != nil {
+			return err
 		}
 	}
 	if err := soundOn(filepath.Join(dst, "DATA")); err != nil {
 		return err
 	}
 	return writeCover(dst)
+}
+
+// hasFold reports whether files has name, matched without regard to case.
+func hasFold(files map[string][]byte, name string) bool {
+	for n := range files {
+		if strings.EqualFold(n, name) {
+			return true
+		}
+	}
+	return false
+}
+
+func write(p string, b []byte) error {
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(p, b, 0o644)
 }
 
 // keepDir: the game's folders that are copied (upper-case name).
@@ -124,36 +137,6 @@ func find(dir, name string) string {
 		}
 	}
 	return ""
-}
-
-func copyFile(from, to string) error {
-	b, err := os.ReadFile(from)
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(to, b, 0o644)
-}
-
-// copyTree copies a folder's files and subfolders, names upper-cased like the DOS
-// originals.
-func copyTree(dir, dst string) error {
-	if err := os.MkdirAll(dst, 0o755); err != nil {
-		return err
-	}
-	ents, _ := os.ReadDir(dir)
-	for _, e := range ents {
-		from, to := filepath.Join(dir, e.Name()), filepath.Join(dst, strings.ToUpper(e.Name()))
-		var err error
-		if e.IsDir() {
-			err = copyTree(from, to)
-		} else {
-			err = copyFile(from, to)
-		}
-		if err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 // writeCover renders the main menu's picture, DATA\OPSCR.BYT (320x200, one byte a pixel),
