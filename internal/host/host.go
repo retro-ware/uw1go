@@ -121,6 +121,7 @@ func Run(title string, scale int, gameMain func()) error {
 		}()
 		gameMain()
 	}()
+	ebiten.SetFullscreen(os.Getenv("GOPLAY_FULLSCREEN") == "1") // the goplay launcher asks for fullscreen
 	return ebiten.RunGame(&game{})
 }
 
